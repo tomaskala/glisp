@@ -5,10 +5,10 @@ import "testing"
 func TestSet(t *testing.T) {
 	env := NewEnv(nil)
 
-	expr1 := &Atom{name: "expr1"}
+	expr1 := &Atom{"expr1"}
 	env.Set("first", expr1)
 
-	expr2 := &Atom{name: "expr2"}
+	expr2 := &Atom{"expr2"}
 	env.Set("second", expr2)
 
 	expr3 := &Number{value: 123}
@@ -28,13 +28,13 @@ func TestIndirectSet(t *testing.T) {
 	mid := NewEnv(top)
 	low := NewEnv(mid)
 
-	lowExpr := &Atom{name: "low"}
+	lowExpr := &Atom{"low"}
 	low.Set("low", lowExpr)
 
-	midExpr := &Atom{name: "mid"}
+	midExpr := &Atom{"mid"}
 	mid.Set("mid", midExpr)
 
-	topExpr := &Atom{name: "top"}
+	topExpr := &Atom{"top"}
 	top.Set("top", topExpr)
 
 	checkIsPresent(t, low, "low", "low", lowExpr)
@@ -55,13 +55,13 @@ func TestSetTopLevel(t *testing.T) {
 	mid := NewEnv(top)
 	low := NewEnv(mid)
 
-	lowExpr := &Atom{name: "low"}
+	lowExpr := &Atom{"low"}
 	low.SetTop("low", lowExpr)
 
-	midExpr := &Atom{name: "mid"}
+	midExpr := &Atom{"mid"}
 	mid.SetTop("mid", midExpr)
 
-	topExpr := &Atom{name: "top"}
+	topExpr := &Atom{"top"}
 	top.SetTop("top", topExpr)
 
 	checkIsPresent(t, low, "low", "low", lowExpr)

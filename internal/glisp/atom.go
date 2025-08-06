@@ -4,7 +4,7 @@ type Atom struct {
 	name string
 }
 
-var True = &Atom{name: "#t"}
+var True = &Atom{"#t"}
 
 func (a *Atom) String() string {
 	return a.name

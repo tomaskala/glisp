@@ -1,5 +1,7 @@
 package glisp
 
+//go:generate stringer -output token_string.go -type tokenType
+
 import (
 	"fmt"
 	"strings"
