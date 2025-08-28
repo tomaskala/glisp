@@ -7,18 +7,18 @@ import (
 )
 
 type Parser struct {
-	tokenizer  *tokenizer
-	parenDepth int
+	name      string     // Name of the source being tokenized, used for error reporting.
+	tokenizer *tokenizer // The underlying tokenizer.
 }
 
 func NewParser(name, source string) *Parser {
-	return &Parser{tokenizer: newTokenizer(name, source)}
+	return &Parser{name: name, tokenizer: newTokenizer(source)}
 }
 
 func (p *Parser) expect(expected tokenType) error {
 	t := p.tokenizer.nextToken()
 	if t.typ != expected {
-		return NewParseError(fmt.Sprintf("Unexpected token, expected %v", expected), p.tokenizer.name, t)
+		return NewParseError(fmt.Sprintf("Unexpected token, expected %v", expected), p.name, t)
 	}
 	return nil
 }
@@ -28,22 +28,17 @@ func (p *Parser) NextExpr() (Expr, error) {
 	return p.parseExpr(t)
 }
 
+// Expr:
+//
+// list | quote | number | atom
 func (p *Parser) parseExpr(t token) (Expr, error) {
 	switch t.typ {
 	case tokenEOF:
-		if p.parenDepth != 0 {
-			return nil, NewParseError("Unexpected end of file", p.tokenizer.name, t)
-		}
-		return nil, EOFError{}
+		return Nil, EOFError{}
 	case tokenErr:
-		return nil, NewParseError(t.val, p.tokenizer.name, t)
+		return Nil, NewParseError(t.val, p.name, t)
 	case tokenLeftParen:
-		p.parenDepth++
 		return p.parseList()
-	case tokenRightParen:
-		return nil, NewParseError("Unexpected right paren", p.tokenizer.name, t)
-	case tokenDot:
-		return nil, NewParseError("Unexpected dot", p.tokenizer.name, t)
 	case tokenQuote:
 		return p.parseQuote()
 	case tokenNumber:
@@ -51,47 +46,65 @@ func (p *Parser) parseExpr(t token) (Expr, error) {
 	case tokenAtom:
 		return &Atom{t.val}, nil
 	default:
-		return nil, NewParseError("Unrecognized token type", p.tokenizer.name, t)
+		return Nil, NewParseError("Unexpected token", p.name, t)
 	}
 }
 
+// List:
+//
+// "(" expr* ("." expr)? ")"
+//
+// "(" is past.
 func (p *Parser) parseList() (Expr, error) {
-	t := p.tokenizer.nextToken()
-	if t.typ == tokenRightParen {
-		p.parenDepth--
-		return Nil, nil
-	}
-	if t.typ == tokenDot {
-		cdr, err := p.NextExpr()
-		if err != nil {
-			return nil, err
+	var list Expr = Nil
+	curr := &list
+	for {
+		t := p.tokenizer.nextToken()
+		switch t.typ {
+		case tokenEOF:
+			return Nil, NewParseError("Unexpected end of file", p.name, t)
+		case tokenRightParen:
+			return list, nil
+		case tokenDot:
+			expr, err := p.NextExpr()
+			if err != nil {
+				return Nil, err
+			}
+			if err := p.expect(tokenRightParen); err != nil {
+				return Nil, err
+			}
+			*curr = expr
+			return list, nil
+		default:
+			expr, err := p.parseExpr(t)
+			if err != nil {
+				return Nil, err
+			}
+			next := &Cons{expr, Nil}
+			*curr = next
+			curr = &next.cdr
 		}
-		if err := p.expect(tokenRightParen); err != nil {
-			return nil, err
-		}
-		p.parenDepth--
-		return cdr, nil
 	}
-	car, err := p.parseExpr(t)
-	if err != nil {
-		return nil, err
-	}
-	cdr, err := p.parseList()
-	if err != nil {
-		return nil, err
-	}
-	return &Cons{car, cdr}, nil
 }
 
+// Quote:
+//
+// "'" expr
+//
+// "'" is past.
 func (p *Parser) parseQuote() (*Cons, error) {
 	quote := &Atom{"quote"}
 	expr, err := p.NextExpr()
 	if err != nil {
-		return nil, err
+		return Nil, err
 	}
-	return &Cons{car: quote, cdr: &Cons{car: expr, cdr: Nil}}, nil
+	return &Cons{quote, &Cons{expr, Nil}}, nil
 }
 
+// Number:
+//
+// number literal
+//
 // Logic taken from https://cs.opensource.google/go/go/+/master:src/text/template/parse/node.go.
 func (p *Parser) parseNumber(t token) (*Number, error) {
 	isUint := false
@@ -127,7 +140,7 @@ func (p *Parser) parseNumber(t token) (*Number, error) {
 			// If we parsed it as a float but it looks like an integer,
 			// it's a huge number too large to fit in an int. Reject it.
 			if !strings.ContainsAny(t.val, ".eEpP") {
-				return nil, NewParseError("Integer overflow", p.tokenizer.name, t)
+				return nil, NewParseError("Integer overflow", p.name, t)
 			}
 			isFloat = true
 			floatVal = f
@@ -151,5 +164,5 @@ func (p *Parser) parseNumber(t token) (*Number, error) {
 	if isFloat {
 		return &Number{floatVal}, nil
 	}
-	return nil, NewParseError("Illegal number syntax", p.tokenizer.name, t)
+	return nil, NewParseError("Illegal number syntax", p.name, t)
 }

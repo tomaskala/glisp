@@ -99,7 +99,7 @@ func bind(param Expr, args []Expr, env *Env) error {
 func sliceToCons(expr []Expr) *Cons {
 	cons := Nil
 	for i := len(expr) - 1; i >= 0; i-- {
-		cons = &Cons{car: expr[i], cdr: cons}
+		cons = &Cons{expr[i], cons}
 	}
 	return cons
 }

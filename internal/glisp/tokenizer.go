@@ -11,7 +11,7 @@ import (
 
 type token struct {
 	typ  tokenType // The type of this token.
-	pos  pos       // The starting position of this token in the input string, in bytes.
+	pos  position  // The starting position of this token in the input string, in bytes.
 	line int       // The starting line of this token in the input string, 1-based.
 	val  string    // The raw value of this token.
 }
@@ -29,7 +29,7 @@ func (t token) String() string {
 
 type tokenType int
 
-type pos int
+type position int
 
 const (
 	tokenEOF tokenType = iota
@@ -52,17 +52,16 @@ const (
 type stateFn func(*tokenizer) stateFn
 
 type tokenizer struct {
-	name   string // Name of the source being tokenized, used for error reporting.
-	source string // Source being tokenized.
-	start  pos    // Start position of the current token.
-	pos    pos    // Current position of the tokenizer.
-	line   int    // Current line of the tokenizer, 1-based.
-	atEOF  bool   // Whether we have reached the end of the file.
-	token  token  // Token returned out to the parser.
+	source string   // Source being tokenized.
+	start  position // Start position of the current token.
+	pos    position // Current position of the tokenizer.
+	line   int      // Current line of the tokenizer, 1-based.
+	atEOF  bool     // Whether we have reached the end of the file.
+	token  token    // Token returned out to the parser.
 }
 
-func newTokenizer(name, source string) *tokenizer {
-	return &tokenizer{name: name, source: source, line: 1}
+func newTokenizer(source string) *tokenizer {
+	return &tokenizer{source: source, line: 1}
 }
 
 func (t *tokenizer) accept(valid string) bool {
@@ -90,11 +89,11 @@ func (t *tokenizer) emit(typ tokenType) stateFn {
 }
 
 func (t *tokenizer) errorf(format string, args ...any) stateFn {
-	t.token = token{tokenErr, t.pos, t.line, fmt.Sprintf(format, args...)}
 	t.start = 0
-	t.pos = pos(0)
+	t.pos = 0
 	t.line = 1
-	t.source = t.source[:0]
+	t.atEOF = true
+	t.token = token{tokenErr, t.pos, t.line, fmt.Sprintf(format, args...)}
 	return nil
 }
 
@@ -104,7 +103,7 @@ func (t *tokenizer) next() rune {
 		return eof
 	}
 	r, w := utf8.DecodeRuneInString(t.source[t.pos:])
-	t.pos += pos(w)
+	t.pos += position(w)
 	if r == '\n' {
 		t.line++
 	}
@@ -112,12 +111,13 @@ func (t *tokenizer) next() rune {
 }
 
 func (t *tokenizer) backup() {
-	if !t.atEOF && t.pos > 0 {
-		r, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
-		t.pos -= pos(w)
-		if r == '\n' {
-			t.line--
-		}
+	if t.atEOF || t.pos == 0 {
+		return
+	}
+	r, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
+	t.pos -= position(w)
+	if r == '\n' {
+		t.line--
 	}
 }
 
@@ -129,13 +129,9 @@ func (t *tokenizer) peek() rune {
 
 func (t *tokenizer) nextToken() token {
 	t.token = token{tokenEOF, t.pos, t.line, "EOF"}
-	state := readExpr
-	for {
-		state = state(t)
-		if state == nil {
-			return t.token
-		}
+	for state := readExpr; state != nil; state = state(t) {
 	}
+	return t.token
 }
 
 func readExpr(t *tokenizer) stateFn {
@@ -143,7 +139,6 @@ func readExpr(t *tokenizer) stateFn {
 	case r == eof:
 		return nil
 	case unicode.IsSpace(r):
-		t.backup()
 		return readSpace(t)
 	case r == '(':
 		return t.emit(tokenLeftParen)
@@ -158,12 +153,12 @@ func readExpr(t *tokenizer) stateFn {
 	case r == '+' || r == '-':
 		// This can be either a number (peek() is a digit) or an atom.
 		next := t.peek()
-		t.backup()
 		if '0' <= next && next <= '9' {
 			return readNumber(t)
 		}
 		return readAtom(t)
 	case '0' <= r && r <= '9':
+		// We have to backup in case we consumed the leading 0 in a hexadecimal, octal or binary number.
 		t.backup()
 		return readNumber(t)
 	case isAtomStart(r):
@@ -175,11 +170,11 @@ func readExpr(t *tokenizer) stateFn {
 
 func readSpace(t *tokenizer) stateFn {
 	for {
-		r := t.peek()
+		r := t.next()
 		if !unicode.IsSpace(r) {
+			t.backup()
 			break
 		}
-		t.next()
 	}
 	t.ignore()
 	return readExpr(t)
@@ -232,11 +227,11 @@ func readNumber(t *tokenizer) stateFn {
 
 func readAtom(t *tokenizer) stateFn {
 	for {
-		r := t.peek()
+		r := t.next()
 		if !isAtom(r) {
+			t.backup()
 			break
 		}
-		t.next()
 	}
 	return t.emit(tokenAtom)
 }

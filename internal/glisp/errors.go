@@ -3,7 +3,7 @@ package glisp
 type LispError struct {
 	msg  string
 	name string
-	pos  pos
+	pos  position
 	line int
 }
 

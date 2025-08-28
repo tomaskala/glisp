@@ -10,7 +10,7 @@ func TestClosureString(t *testing.T) {
 
 	a1 := &Closure{Nil, Nil, env}
 	a2 := &Closure{&Atom{"param"}, Nil, env}
-	a3 := &Closure{&Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: Nil}}, Nil, env}
+	a3 := &Closure{&Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}, Nil, env}
 
 	s1 := "<lambda ()>"
 	if a1.String() != s1 {
@@ -79,34 +79,34 @@ func TestReduce(t *testing.T) {
 			result: Nil,
 		},
 		"constant nil, args": {
-			param: &Cons{car: &Atom{"a"}, cdr: &Cons{car: &Atom{"b"}, cdr: Nil}},
+			param: &Cons{&Atom{"a"}, &Cons{&Atom{"b"}, Nil}},
 			body:  Nil,
 
-			arg: &Cons{car: &Number{1}, cdr: &Cons{car: &Number{2}, cdr: Nil}},
+			arg: &Cons{&Number{1}, &Cons{&Number{2}, Nil}},
 
 			result: Nil,
 		},
 		"identity": {
-			param: &Cons{car: &Atom{"x"}, cdr: Nil},
+			param: &Cons{&Atom{"x"}, Nil},
 			body:  &Atom{"x"},
 
-			arg: &Cons{car: &Number{1337}, cdr: Nil},
+			arg: &Cons{&Number{1337}, Nil},
 
 			result: &Number{1337},
 		},
 		"return first arg": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: Nil}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, Nil}},
 			body:  &Atom{"x"},
 
-			arg: &Cons{car: &Number{1337}, cdr: &Cons{car: &Number{12}, cdr: Nil}},
+			arg: &Cons{&Number{1337}, &Cons{&Number{12}, Nil}},
 
 			result: &Number{1337},
 		},
 		"return second arg": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: Nil}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, Nil}},
 			body:  &Atom{"y"},
 
-			arg: &Cons{car: &Number{1337}, cdr: &Cons{car: &Number{12}, cdr: Nil}},
+			arg: &Cons{&Number{1337}, &Cons{&Number{12}, Nil}},
 
 			result: &Number{12},
 		},
@@ -114,71 +114,71 @@ func TestReduce(t *testing.T) {
 			param: &Atom{"args"},
 			body:  &Atom{"args"},
 
-			arg: &Cons{car: &Number{1337}, cdr: &Cons{car: &Number{12}, cdr: Nil}},
+			arg: &Cons{&Number{1337}, &Cons{&Number{12}, Nil}},
 
-			result: &Cons{car: &Number{1337}, cdr: &Cons{car: &Number{12}, cdr: Nil}},
+			result: &Cons{&Number{1337}, &Cons{&Number{12}, Nil}},
 		},
 		"improper list, return first arg": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: &Atom{"rest"}}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, &Atom{"rest"}}},
 			body:  &Atom{"x"},
 
-			arg: &Cons{car: &Atom{"one"}, cdr: &Cons{car: &Number{2}, cdr: &Cons{car: &Number{3}, cdr: &Cons{car: &Number{4}, cdr: Nil}}}},
+			arg: &Cons{&Atom{"one"}, &Cons{&Number{2}, &Cons{&Number{3}, &Cons{&Number{4}, Nil}}}},
 
 			result: &Number{1},
 		},
 		"improper list, return second arg": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: &Atom{"rest"}}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, &Atom{"rest"}}},
 			body:  &Atom{"y"},
 
-			arg: &Cons{car: &Number{1}, cdr: &Cons{car: &Atom{"two"}, cdr: &Cons{car: &Number{3}, cdr: &Cons{car: &Number{4}, cdr: Nil}}}},
+			arg: &Cons{&Number{1}, &Cons{&Atom{"two"}, &Cons{&Number{3}, &Cons{&Number{4}, Nil}}}},
 
 			result: &Number{2},
 		},
 		"improper list, return catch-all": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: &Atom{"rest"}}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, &Atom{"rest"}}},
 			body:  &Atom{"rest"},
 
-			arg: &Cons{car: &Number{1}, cdr: &Cons{car: &Number{2}, cdr: &Cons{car: &Number{3}, cdr: &Cons{car: &Number{4}, cdr: Nil}}}},
+			arg: &Cons{&Number{1}, &Cons{&Number{2}, &Cons{&Number{3}, &Cons{&Number{4}, Nil}}}},
 
-			result: &Cons{car: &Number{3}, cdr: &Cons{car: &Number{4}, cdr: Nil}},
+			result: &Cons{&Number{3}, &Cons{&Number{4}, Nil}},
 		},
 		"improper list, return unused catch-all": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: &Atom{"rest"}}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, &Atom{"rest"}}},
 			body:  &Atom{"rest"},
 
-			arg: &Cons{car: &Atom{"one"}, cdr: &Cons{car: &Number{2}, cdr: Nil}},
+			arg: &Cons{&Atom{"one"}, &Cons{&Number{2}, Nil}},
 
 			result: Nil,
 		},
 		"uses the closure scope": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: &Atom{"rest"}}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, &Atom{"rest"}}},
 			body:  &Atom{"one"},
 
-			arg: &Cons{car: &Atom{"one"}, cdr: &Cons{car: &Atom{"two"}, cdr: Nil}},
+			arg: &Cons{&Atom{"one"}, &Cons{&Atom{"two"}, Nil}},
 
 			result: &Number{111},
 		},
 		"too few arguments": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: Nil}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, Nil}},
 			body:  &Atom{"y"},
 
-			arg: &Cons{car: &Number{1337}, cdr: Nil},
+			arg: &Cons{&Number{1337}, Nil},
 
 			err: NewEvalError("The function expects more arguments, 1 given"),
 		},
 		"too many arguments": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Atom{"y"}, cdr: Nil}},
+			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, Nil}},
 			body:  &Atom{"y"},
 
-			arg: &Cons{car: &Atom{"one"}, cdr: &Cons{car: &Number{2}, cdr: &Cons{car: &Number{3}, cdr: &Cons{car: &Number{4}, cdr: Nil}}}},
+			arg: &Cons{&Atom{"one"}, &Cons{&Number{2}, &Cons{&Number{3}, &Cons{&Number{4}, Nil}}}},
 
 			err: NewEvalError("The function expects fewer arguments, 4 given"),
 		},
 		"non-atom in parameter list": {
-			param: &Cons{car: &Atom{"x"}, cdr: &Cons{car: &Number{15}, cdr: Nil}},
+			param: &Cons{&Atom{"x"}, &Cons{&Number{15}, Nil}},
 			body:  &Atom{"y"},
 
-			arg: &Cons{car: &Number{1337}, cdr: Nil},
+			arg: &Cons{&Number{1337}, Nil},
 
 			err: NewEvalError(fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{15})),
 		},
@@ -186,15 +186,15 @@ func TestReduce(t *testing.T) {
 			param: &Number{123},
 			body:  &Number{456},
 
-			arg: &Cons{car: &Number{1337}, cdr: Nil},
+			arg: &Cons{&Number{1337}, Nil},
 
 			err: NewEvalError(fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", &Number{123})),
 		},
 		"undefined atom in the body": {
-			param: &Cons{car: &Atom{"x"}, cdr: Nil},
+			param: &Cons{&Atom{"x"}, Nil},
 			body:  &Atom{"undefined"},
 
-			arg: &Cons{car: &Number{1337}, cdr: Nil},
+			arg: &Cons{&Number{1337}, Nil},
 
 			err: NewEvalError(fmt.Sprintf("Undefined name: %s", &Atom{"undefined"})),
 		},
@@ -247,13 +247,13 @@ func TestEvalArg(t *testing.T) {
 		}{
 			"nil":           {Nil, []Expr{}},
 			"single atom":   {&Atom{"fst"}, []Expr{&Atom{"first atom"}}},
-			"single number": {&Cons{car: &Number{99}, cdr: Nil}, []Expr{&Number{99}}},
+			"single number": {&Cons{&Number{99}, Nil}, []Expr{&Number{99}}},
 			"multiple atoms and numbers, proper list": {
-				&Cons{car: &Number{99}, cdr: &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: Nil}}},
+				&Cons{&Number{99}, &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}},
 				[]Expr{&Number{99}, &Atom{"first atom"}, &Number{127}},
 			},
 			"multiple atoms and numbers, improper list": {
-				&Cons{car: &Number{99}, cdr: &Cons{car: &Atom{"fst"}, cdr: &Atom{"snd"}}},
+				&Cons{&Number{99}, &Cons{&Atom{"fst"}, &Atom{"snd"}}},
 				[]Expr{&Number{99}, &Atom{"first atom"}, &Number{127}},
 			},
 		} {
@@ -270,7 +270,7 @@ func TestEvalArg(t *testing.T) {
 	t.Run("undefined symbol", func(t *testing.T) {
 		env := NewEnv(nil)
 
-		_, err := evalArg(&Cons{car: &Atom{"a"}, cdr: Nil}, env)
+		_, err := evalArg(&Cons{&Atom{"a"}, Nil}, env)
 		if err == nil {
 			t.Errorf("Expected error due to undefined \"a\", got no error")
 		}
@@ -290,46 +290,46 @@ func TestBind(t *testing.T) {
 			param: Nil,
 		},
 		"single parameter": {
-			param:        &Cons{car: &Atom{"fst"}, cdr: Nil},
+			param:        &Cons{&Atom{"fst"}, Nil},
 			args:         []Expr{&Number{1}},
 			paramsList:   []string{"fst"},
 			expectedVals: []Expr{&Number{1}},
 		},
 		"multiple parameters": {
-			param:        &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: Nil}},
+			param:        &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
 			args:         []Expr{&Number{10}, &Number{20}},
 			paramsList:   []string{"fst", "snd"},
 			expectedVals: []Expr{&Number{10}, &Number{20}},
 		},
 		"improper parameter list": {
-			param:        &Cons{car: &Atom{"head"}, cdr: &Atom{"tail"}},
+			param:        &Cons{&Atom{"head"}, &Atom{"tail"}},
 			args:         []Expr{&Number{10}, &Number{20}},
 			paramsList:   []string{"head", "tail"},
-			expectedVals: []Expr{&Number{10}, &Cons{car: &Number{20}, cdr: Nil}},
+			expectedVals: []Expr{&Number{10}, &Cons{&Number{20}, Nil}},
 		},
 		"improper parameter list, empty tail": {
-			param:        &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: &Atom{"rest"}}},
+			param:        &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, &Atom{"rest"}}},
 			args:         []Expr{&Number{10}, &Number{20}},
 			paramsList:   []string{"fst", "snd", "rest"},
 			expectedVals: []Expr{&Number{10}, &Number{20}, Nil},
 		},
 		"too few arguments 1": {
-			param: &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: Nil}},
+			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
 			args:  []Expr{&Number{1}},
 			err:   NewEvalError("The function expects more arguments, 1 given"),
 		},
 		"too few arguments 2": {
-			param: &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: &Cons{car: &Atom{"thd"}, cdr: &Cons{car: &Atom{"frh"}, cdr: Nil}}}},
+			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, &Cons{&Atom{"thd"}, &Cons{&Atom{"frh"}, Nil}}}},
 			args:  []Expr{&Number{1}, &Number{2}},
 			err:   NewEvalError("The function expects more arguments, 2 given"),
 		},
 		"too many arguments": {
-			param: &Cons{car: &Atom{"fst"}, cdr: &Cons{car: &Atom{"snd"}, cdr: Nil}},
+			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
 			args:  []Expr{&Number{1}, &Number{2}, &Number{3}},
 			err:   NewEvalError("The function expects fewer arguments, 3 given"),
 		},
 		"non-atom in parameter list": {
-			param: &Cons{car: &Number{1}, cdr: Nil},
+			param: &Cons{&Number{1}, Nil},
 			err:   NewEvalError(fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{1})),
 		},
 		"non-atom parameter list": {
@@ -373,10 +373,10 @@ func TestSliceToCons(t *testing.T) {
 		cons  *Cons
 	}{
 		"nil":            {[]Expr{}, Nil},
-		"single element": {[]Expr{&Atom{"a"}}, &Cons{car: &Atom{"a"}, cdr: Nil}},
+		"single element": {[]Expr{&Atom{"a"}}, &Cons{&Atom{"a"}, Nil}},
 		"multiple elements": {
 			[]Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}},
-			&Cons{car: &Atom{"a"}, cdr: &Cons{car: &Atom{"b"}, cdr: &Cons{car: &Atom{"c"}, cdr: Nil}}},
+			&Cons{&Atom{"a"}, &Cons{&Atom{"b"}, &Cons{&Atom{"c"}, Nil}}},
 		},
 	} {
 		cons := sliceToCons(tc.slice)

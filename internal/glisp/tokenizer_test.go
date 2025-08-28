@@ -73,52 +73,53 @@ var complexCases = map[string]complexTest{
 	},
 	"multiline": {
 		`; Map function implementation.
-		(define map (lambda (f xs)
+		(define     map		(lambda 
+	(f xs)
 		  ; Base case.
-		  (if (null? xs) '()
-		      ; Recursive case.
-		      (cons (f (car xs)) (map f (cdr xs))))))
+		  (		 if (	null? xs) '()
+				; Recursive case.
+					(cons (f (car xs)) (map f (cdr xs))))))
 		`,
 		[]token{
 			{tokenLeftParen, 34, 2, "("},
 			{tokenAtom, 40, 2, "define"},
-			{tokenAtom, 44, 2, "map"},
-			{tokenLeftParen, 46, 2, "("},
-			{tokenAtom, 52, 2, "lambda"},
-			{tokenLeftParen, 54, 2, "("},
-			{tokenAtom, 55, 2, "f"},
-			{tokenAtom, 58, 2, "xs"},
-			{tokenRightParen, 59, 2, ")"},
-			{tokenLeftParen, 82, 4, "("},
-			{tokenAtom, 84, 4, "if"},
-			{tokenLeftParen, 86, 4, "("},
-			{tokenAtom, 91, 4, "null?"},
-			{tokenAtom, 94, 4, "xs"},
-			{tokenRightParen, 95, 4, ")"},
-			{tokenQuote, 97, 4, "'"},
-			{tokenLeftParen, 98, 4, "("},
-			{tokenRightParen, 99, 4, ")"},
-			{tokenLeftParen, 135, 6, "("},
-			{tokenAtom, 139, 6, "cons"},
-			{tokenLeftParen, 141, 6, "("},
-			{tokenAtom, 142, 6, "f"},
-			{tokenLeftParen, 144, 6, "("},
-			{tokenAtom, 147, 6, "car"},
-			{tokenAtom, 150, 6, "xs"},
-			{tokenRightParen, 151, 6, ")"},
-			{tokenRightParen, 152, 6, ")"},
-			{tokenLeftParen, 154, 6, "("},
-			{tokenAtom, 157, 6, "map"},
-			{tokenAtom, 159, 6, "f"},
-			{tokenLeftParen, 161, 6, "("},
-			{tokenAtom, 164, 6, "cdr"},
-			{tokenAtom, 167, 6, "xs"},
-			{tokenRightParen, 168, 6, ")"},
-			{tokenRightParen, 169, 6, ")"},
-			{tokenRightParen, 170, 6, ")"},
-			{tokenRightParen, 171, 6, ")"},
-			{tokenRightParen, 172, 6, ")"},
-			{tokenRightParen, 173, 6, ")"},
+			{tokenAtom, 48, 2, "map"},
+			{tokenLeftParen, 51, 2, "("},
+			{tokenAtom, 57, 2, "lambda"},
+			{tokenLeftParen, 61, 3, "("},
+			{tokenAtom, 62, 3, "f"},
+			{tokenAtom, 65, 3, "xs"},
+			{tokenRightParen, 66, 3, ")"},
+			{tokenLeftParen, 89, 5, "("},
+			{tokenAtom, 94, 5, "if"},
+			{tokenLeftParen, 96, 5, "("},
+			{tokenAtom, 102, 5, "null?"},
+			{tokenAtom, 105, 5, "xs"},
+			{tokenRightParen, 106, 5, ")"},
+			{tokenQuote, 108, 5, "'"},
+			{tokenLeftParen, 109, 5, "("},
+			{tokenRightParen, 110, 5, ")"},
+			{tokenLeftParen, 139, 7, "("},
+			{tokenAtom, 143, 7, "cons"},
+			{tokenLeftParen, 145, 7, "("},
+			{tokenAtom, 146, 7, "f"},
+			{tokenLeftParen, 148, 7, "("},
+			{tokenAtom, 151, 7, "car"},
+			{tokenAtom, 154, 7, "xs"},
+			{tokenRightParen, 155, 7, ")"},
+			{tokenRightParen, 156, 7, ")"},
+			{tokenLeftParen, 158, 7, "("},
+			{tokenAtom, 161, 7, "map"},
+			{tokenAtom, 163, 7, "f"},
+			{tokenLeftParen, 165, 7, "("},
+			{tokenAtom, 168, 7, "cdr"},
+			{tokenAtom, 171, 7, "xs"},
+			{tokenRightParen, 172, 7, ")"},
+			{tokenRightParen, 173, 7, ")"},
+			{tokenRightParen, 174, 7, ")"},
+			{tokenRightParen, 175, 7, ")"},
+			{tokenRightParen, 176, 7, ")"},
+			{tokenRightParen, 177, 7, ")"},
 		},
 	},
 	"number and atom": {
@@ -133,7 +134,7 @@ var complexCases = map[string]complexTest{
 func TestTokenizer(t *testing.T) {
 	t.Run("simple cases", func(t *testing.T) {
 		for name, tc := range simpleCases {
-			tokenizer := newTokenizer(name, tc.source)
+			tokenizer := newTokenizer(tc.source)
 			token := tokenizer.nextToken()
 			if token != tc.token {
 				t.Errorf("%s: expected %#v, got %#v", name, tc.token, token)
@@ -146,7 +147,7 @@ func TestTokenizer(t *testing.T) {
 	})
 	t.Run("complex cases", func(t *testing.T) {
 		for name, tc := range complexCases {
-			tokenizer := newTokenizer(name, tc.source)
+			tokenizer := newTokenizer(tc.source)
 			for _, expected := range tc.tokens {
 				token := tokenizer.nextToken()
 				if token != expected {

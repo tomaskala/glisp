@@ -4,19 +4,19 @@ import "testing"
 
 func TestConsString(t *testing.T) {
 	a1 := Nil
-	a2 := &Cons{car: &Atom{"head"}, cdr: Nil}
-	a3 := &Cons{car: &Atom{"a"}, cdr: &Cons{car: &Atom{"b"}, cdr: Nil}}
-	a4 := &Cons{car: &Atom{"first"}, cdr: &Atom{"second"}}
+	a2 := &Cons{&Atom{"head"}, Nil}
+	a3 := &Cons{&Atom{"a"}, &Cons{&Atom{"b"}, Nil}}
+	a4 := &Cons{&Atom{"first"}, &Atom{"second"}}
 	a5 := &Cons{
-		car: &Cons{
-			car: &Atom{"a"},
-			cdr: &Atom{"b"},
+		&Cons{
+			&Atom{"a"},
+			&Atom{"b"},
 		},
-		cdr: &Cons{
-			car: &Atom{"c"},
-			cdr: &Cons{
-				car: &Atom{"d"},
-				cdr: Nil,
+		&Cons{
+			&Atom{"c"},
+			&Cons{
+				&Atom{"d"},
+				Nil,
 			},
 		},
 	}
@@ -53,33 +53,33 @@ func TestConsEqual(t *testing.T) {
 		snd *Cons
 	}{
 		"nil":               {Nil, Nil},
-		"single element":    {&Cons{car: &Atom{"head"}, cdr: Nil}, &Cons{car: &Atom{"head"}, cdr: Nil}},
-		"multiple elements": {&Cons{car: &Atom{"a"}, cdr: &Cons{car: &Atom{"b"}, cdr: Nil}}, &Cons{car: &Atom{"a"}, cdr: &Cons{car: &Atom{"b"}, cdr: Nil}}},
+		"single element":    {&Cons{&Atom{"head"}, Nil}, &Cons{&Atom{"head"}, Nil}},
+		"multiple elements": {&Cons{&Atom{"a"}, &Cons{&Atom{"b"}, Nil}}, &Cons{&Atom{"a"}, &Cons{&Atom{"b"}, Nil}}},
 		"improper list":     {&Cons{&Atom{"a"}, &Atom{"b"}}, &Cons{&Atom{"a"}, &Atom{"b"}}},
 		"nested": {
 			&Cons{
-				car: &Cons{
-					car: &Atom{"a"},
-					cdr: &Atom{"b"},
+				&Cons{
+					&Atom{"a"},
+					&Atom{"b"},
 				},
-				cdr: &Cons{
-					car: &Atom{"c"},
-					cdr: &Cons{
-						car: &Atom{"d"},
-						cdr: Nil,
+				&Cons{
+					&Atom{"c"},
+					&Cons{
+						&Atom{"d"},
+						Nil,
 					},
 				},
 			},
 			&Cons{
-				car: &Cons{
-					car: &Atom{"a"},
-					cdr: &Atom{"b"},
+				&Cons{
+					&Atom{"a"},
+					&Atom{"b"},
 				},
-				cdr: &Cons{
-					car: &Atom{"c"},
-					cdr: &Cons{
-						car: &Atom{"d"},
-						cdr: Nil,
+				&Cons{
+					&Atom{"c"},
+					&Cons{
+						&Atom{"d"},
+						Nil,
 					},
 				},
 			},
@@ -94,34 +94,34 @@ func TestConsEqual(t *testing.T) {
 		fst *Cons
 		snd *Cons
 	}{
-		"nils":            {Nil, &Cons{car: Nil, cdr: Nil}},
-		"different atom":  {&Cons{car: &Atom{"head1"}, cdr: Nil}, &Cons{car: &Atom{"head2"}, cdr: Nil}},
-		"flat and nested": {&Cons{car: &Atom{"a"}, cdr: &Atom{"b"}}, &Cons{car: &Cons{car: &Atom{"a"}, cdr: Nil}, cdr: &Cons{car: &Atom{"b"}, cdr: Nil}}},
-		"atom and number": {&Cons{car: &Atom{"1"}, cdr: Nil}, &Cons{car: &Number{1}, cdr: Nil}},
+		"nils":            {Nil, &Cons{Nil, Nil}},
+		"different atom":  {&Cons{&Atom{"head1"}, Nil}, &Cons{&Atom{"head2"}, Nil}},
+		"flat and nested": {&Cons{&Atom{"a"}, &Atom{"b"}}, &Cons{&Cons{&Atom{"a"}, Nil}, &Cons{&Atom{"b"}, Nil}}},
+		"atom and number": {&Cons{&Atom{"1"}, Nil}, &Cons{&Number{1}, Nil}},
 		"nested": {
 			&Cons{
-				car: &Cons{
-					car: &Atom{"a"},
-					cdr: &Atom{"b"},
+				&Cons{
+					&Atom{"a"},
+					&Atom{"b"},
 				},
-				cdr: &Cons{
-					car: &Atom{"c"},
-					cdr: &Cons{
-						car: &Atom{"d"},
-						cdr: Nil,
+				&Cons{
+					&Atom{"c"},
+					&Cons{
+						&Atom{"d"},
+						Nil,
 					},
 				},
 			},
 			&Cons{
-				car: &Cons{
-					car: &Atom{"a"},
-					cdr: &Atom{"b"},
+				&Cons{
+					&Atom{"a"},
+					&Atom{"b"},
 				},
-				cdr: &Cons{
-					car: &Atom{"c"},
-					cdr: &Cons{
-						car: &Atom{"e"},
-						cdr: Nil,
+				&Cons{
+					&Atom{"c"},
+					&Cons{
+						&Atom{"e"},
+						Nil,
 					},
 				},
 			},
