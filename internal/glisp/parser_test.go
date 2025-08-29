@@ -185,7 +185,7 @@ var invalidInputs = map[string]parserTest{
 	"unbalanced parens2": {source: "(* (+ 1 2 3) (+ 4 5 6", err: NewParseError("Unexpected end of file", "unbalanced parens2", token{tokenEOF, 21, 1, "EOF"})},
 	"unbalanced parens3": {source: "(((", err: NewParseError("Unexpected end of file", "unbalanced parens3", token{tokenEOF, 3, 1, "EOF"})},
 	"unbalanced parens4": {source: ")(", err: NewParseError("Unexpected token", "unbalanced parens4", token{tokenRightParen, 1, 1, ")"})},
-	"unterminated list":  {source: "(a b c d e f g h", err: NewParseError("Unexpected end of file", "unterminated list", token{tokenRightParen, 16, 1, "EOF"})},
+	"unterminated list":  {source: "(a b c d e f g h", err: NewParseError("Unexpected end of file", "unterminated list", token{tokenEOF, 16, 1, "EOF"})},
 	"unterminated dot":   {source: "(fun . x", err: NewParseError("Unexpected token, expected tokenRightParen", "unterminated dot", token{tokenEOF, 8, 1, "EOF"})},
 }
 
@@ -228,7 +228,11 @@ func TestParser(t *testing.T) {
 		for name, tc := range invalidInputs {
 			parser := NewParser(name, tc.source)
 			_, err := parser.NextExpr()
-			if !errors.Is(err, tc.err) {
+			var lispError LispError
+			if !errors.As(err, &lispError) {
+				t.Fatalf("%s: expected lisp error, got %v", name, err)
+			}
+			if tc.err != lispError {
 				t.Errorf("%s: expected error %v, got %v", name, tc.err, err)
 			}
 		}

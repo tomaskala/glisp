@@ -196,7 +196,7 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Number{1337}, Nil},
 
-			err: NewEvalError(fmt.Sprintf("Undefined name: %s", &Atom{"undefined"})),
+			err: NewEvalError(fmt.Sprintf("Undefined name: '%s'", &Atom{"undefined"})),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

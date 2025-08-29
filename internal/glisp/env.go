@@ -22,7 +22,7 @@ func (e *Env) Get(atom *Atom) (Expr, error) {
 		}
 		curr = curr.parent
 	}
-	return Nil, NewEvalError(fmt.Sprintf("Undefined name: %s", atom.name))
+	return Nil, NewEvalError(fmt.Sprintf("Undefined name: '%s'", atom.name))
 }
 
 func (e *Env) Set(atom string, expr Expr) {
