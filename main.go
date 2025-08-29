@@ -28,7 +28,7 @@ func eval(env *glisp.Env, parser *glisp.Parser) (glisp.Expr, error) {
 			// We will eventually hit this case because the parser will return an EOF error.
 			return result, err
 		}
-		result, err = expr.Eval(env)
+		result, err = glisp.Eval(expr, env)
 		if err != nil {
 			return result, err
 		}

@@ -5,44 +5,49 @@ import (
 	"testing"
 )
 
-func TestClosureString(t *testing.T) {
+func TestAtomEval(t *testing.T) {
 	env := NewEnv(nil)
 
-	a1 := &Closure{Nil, Nil, env}
-	a2 := &Closure{&Atom{"param"}, Nil, env}
-	a3 := &Closure{&Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}, Nil, env}
-
-	s1 := "<lambda ()>"
-	if a1.String() != s1 {
-		t.Errorf("Expected \"%s\", got \"%s\"", s1, a1.String())
+	trueEval, err := Eval(True, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating True: %v", err)
 	}
 
-	s2 := "<lambda param>"
-	if a2.String() != s2 {
-		t.Errorf("Expected \"%s\", got \"%s\"", s2, a2.String())
+	if trueEval != True {
+		t.Errorf("True evaluated to something else than itself: %v", trueEval)
 	}
 
-	s3 := "<lambda (fst snd)>"
-	if a3.String() != s3 {
-		t.Errorf("Expected \"%s\", git \"%s\"", s3, a3.String())
+	a := &Atom{"atom"}
+	env.Set("atom", a)
+
+	aEval, err := Eval(a, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating an atom: %v", err)
+	}
+
+	if aEval != a {
+		t.Errorf("Atom evaluated to something else than itself: %v", aEval)
+	}
+
+	b := &Atom{"another"}
+	bEval, err := Eval(b, env)
+	if err == nil {
+		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
 	}
 }
 
-func TestClosureEqual(t *testing.T) {
+func TestBuiltinEval(t *testing.T) {
 	env := NewEnv(nil)
 
-	a11 := &Closure{Nil, Nil, env}
-	a12 := &Closure{Nil, Nil, env}
-	a2 := &Closure{Nil, Nil, env}
+	a := &Builtin{"first", func(e Expr, env *Env) (Expr, error) { return e, nil }}
 
-	if !a11.Equal(a11) {
-		t.Errorf("Closure must be equal to itself")
+	aEval, err := Eval(a, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating a builtin: %v", err)
 	}
-	if a11.Equal(a12) {
-		t.Errorf("Closure must not be equal to another, even with the same name")
-	}
-	if a11.Equal(a2) {
-		t.Errorf("Closure must not be equal to another with a different name")
+
+	if aEval != a {
+		t.Errorf("Builtin evaluated to something else than itself: %v", aEval)
 	}
 }
 
@@ -50,7 +55,7 @@ func TestClosureEval(t *testing.T) {
 	env := NewEnv(nil)
 	a := &Closure{Nil, Nil, env}
 
-	aEval, err := a.Eval(env)
+	aEval, err := Eval(a, env)
 	if err != nil {
 		t.Fatalf("Error when evaluating a closure: %v", err)
 	}
@@ -383,5 +388,66 @@ func TestSliceToCons(t *testing.T) {
 		if !cons.Equal(tc.cons) {
 			t.Errorf("sliceToCons of %v: expected %v, got %v", tc.slice, tc.cons, cons)
 		}
+	}
+}
+
+func TestConsEval(t *testing.T) {
+	env := NewEnv(nil)
+
+	trueEval, err := Eval(True, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating True: %v", err)
+	}
+
+	if trueEval != True {
+		t.Errorf("True evaluated to something else than itself: %v", trueEval)
+	}
+
+	a := &Atom{"atom"}
+	env.Set("atom", a)
+
+	aEval, err := Eval(a, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating an atom: %v", err)
+	}
+
+	if aEval != a {
+		t.Errorf("Atom evaluated to something else than itself: %v", aEval)
+	}
+
+	b := &Atom{"another"}
+	bEval, err := Eval(b, env)
+	if err == nil {
+		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
+	}
+}
+
+func TestNilEval(t *testing.T) {
+	env := NewEnv(nil)
+
+	n := Nil
+
+	nEval, err := Eval(n, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating nil: %v", err)
+	}
+
+	if nEval != Nil {
+		t.Errorf("Nil evaluated to something else than itself: %v", nEval)
+	}
+}
+
+func TestNumberEval(t *testing.T) {
+	env := NewEnv(nil)
+
+	a := &Number{123}
+
+	aEval, err := Eval(a, env)
+	if err != nil {
+		t.Fatalf("Error when evaluating a number: %v", err)
+	}
+
+	if aEval != a {
+		t.Errorf("Number evaluated to something else than itself: %v", aEval)
 	}
 }

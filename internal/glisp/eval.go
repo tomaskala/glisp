@@ -2,25 +2,39 @@ package glisp
 
 import "fmt"
 
-type Closure struct {
-	param Expr
-	body  Expr
-	env   *Env
-}
-
-func (c *Closure) String() string {
-	return fmt.Sprintf("<lambda %s>", c.param.String())
-}
-
-func (c *Closure) Equal(o Expr) bool {
-	if o, ok := o.(*Closure); ok {
-		return c == o
+func Eval(expr Expr, env *Env) (Expr, error) {
+	switch expr := expr.(type) {
+	case *Builtin, *Closure, *NilExpr, *Number:
+		return expr, nil
+	case *Atom:
+		if expr == True {
+			return True, nil
+		}
+		val, err := env.Get(expr)
+		if err != nil {
+			return Nil, err
+		}
+		return val, nil
+	case *Cons:
+		fun, err := Eval(expr.car, env)
+		if err != nil {
+			return Nil, err
+		}
+		return apply(fun, expr.cdr, env)
+	default:
+		return Nil, NewEvalError(fmt.Sprintf("Unrecognized expression type: %v", expr))
 	}
-	return false
 }
 
-func (c *Closure) Eval(env *Env) (Expr, error) {
-	return c, nil
+func apply(callable, arg Expr, env *Env) (Expr, error) {
+	switch callable := callable.(type) {
+	case *Builtin:
+		return callable.fun(arg, env)
+	case *Closure:
+		return reduce(callable, arg, env)
+	default:
+		return Nil, NewEvalError(fmt.Sprintf("Attempting to evaluate %v, expected \"Builtin\" or \"Closure\"", callable))
+	}
 }
 
 func reduce(fun *Closure, arg Expr, env *Env) (Expr, error) {
@@ -32,7 +46,7 @@ func reduce(fun *Closure, arg Expr, env *Env) (Expr, error) {
 	if err := bind(fun.param, evaluatedArgs, closureEnv); err != nil {
 		return Nil, err
 	}
-	return fun.body.Eval(closureEnv)
+	return Eval(fun.body, closureEnv)
 }
 
 func evalArg(arg Expr, env *Env) ([]Expr, error) {
@@ -43,7 +57,7 @@ func evalArg(arg Expr, env *Env) ([]Expr, error) {
 		if !ok {
 			break
 		}
-		expr, err := cons.car.Eval(env)
+		expr, err := Eval(cons.car, env)
 		if err != nil {
 			return nil, err
 		}
