@@ -34,7 +34,7 @@ func (p *Parser) NextExpr() (Expr, error) {
 func (p *Parser) parseExpr(t token) (Expr, error) {
 	switch t.typ {
 	case tokenEOF:
-		return Nil, EOFError{}
+		return Nil, NewEOFError(p.name, t)
 	case tokenErr:
 		return Nil, NewParseError(t.val, p.name, t)
 	case tokenLeftParen:

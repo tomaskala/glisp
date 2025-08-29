@@ -30,7 +30,8 @@ func runScript(path string) int {
 	parser := glisp.NewParser(path, string(source))
 	for {
 		expr, err := parser.NextExpr()
-		if errors.Is(err, glisp.EOFError{}) {
+		var lispError glisp.LispError
+		if errors.As(err, &lispError) && lispError.Type == glisp.ErrorEOF {
 			return exitSuccess
 		}
 		if err != nil {

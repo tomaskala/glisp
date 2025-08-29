@@ -1,26 +1,33 @@
 package glisp
 
+type ErrorType int
+
+const (
+	ErrorEOF ErrorType = iota
+	ErrorParse
+	ErrorEval
+)
+
 type LispError struct {
-	msg  string
-	name string
-	pos  position
-	line int
-}
-
-type EOFError struct{}
-
-func (EOFError) Error() string {
-	return "EOF"
+	Type ErrorType
+	Msg  string
+	Name string
+	Pos  position
+	Line int
 }
 
 func (e LispError) Error() string {
-	return e.msg
+	return e.Msg
+}
+
+func NewEOFError(name string, token token) error {
+	return LispError{ErrorEOF, "EOF", name, token.pos, token.line}
 }
 
 func NewEvalError(msg string) error {
-	return LispError{msg: msg}
+	return LispError{Type: ErrorEval, Msg: msg}
 }
 
 func NewParseError(msg, name string, token token) error {
-	return LispError{msg: msg, name: name, pos: token.pos, line: token.line}
+	return LispError{ErrorParse, msg, name, token.pos, token.line}
 }

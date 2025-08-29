@@ -180,13 +180,13 @@ var complexInputs = map[string]parserTest{
 
 var invalidInputs = map[string]parserTest{
 	// This is valid, but is here so that we can easily check the err field.
-	"empty":              {source: "", err: EOFError{}},
-	"unbalanced parens1": {source: "(+ 1 2 3", err: NewParseError("Unexpected end of file", "unbalanced parens1", token{tokenEOF, position(8), 1, "EOF"})},
-	"unbalanced parens2": {source: "(* (+ 1 2 3) (+ 4 5 6", err: NewParseError("Unexpected end of file", "unbalanced parens2", token{tokenEOF, position(21), 1, "EOF"})},
-	"unbalanced parens3": {source: "(((", err: NewParseError("Unexpected end of file", "unbalanced parens3", token{tokenEOF, position(3), 1, "EOF"})},
-	"unbalanced parens4": {source: ")(", err: NewParseError("Unexpected token", "unbalanced parens4", token{tokenRightParen, position(1), 1, ")"})},
-	"unterminated list":  {source: "(a b c d e f g h", err: NewParseError("Unexpected end of file", "unterminated list", token{tokenRightParen, position(16), 1, "EOF"})},
-	"unterminated dot":   {source: "(fun . x", err: NewParseError("Unexpected token, expected tokenRightParen", "unterminated dot", token{tokenEOF, position(8), 1, "EOF"})},
+	"empty":              {source: "", err: NewEOFError("empty", token{tokenEOF, 0, 1, "EOF"})},
+	"unbalanced parens1": {source: "(+ 1 2 3", err: NewParseError("Unexpected end of file", "unbalanced parens1", token{tokenEOF, 8, 1, "EOF"})},
+	"unbalanced parens2": {source: "(* (+ 1 2 3) (+ 4 5 6", err: NewParseError("Unexpected end of file", "unbalanced parens2", token{tokenEOF, 21, 1, "EOF"})},
+	"unbalanced parens3": {source: "(((", err: NewParseError("Unexpected end of file", "unbalanced parens3", token{tokenEOF, 3, 1, "EOF"})},
+	"unbalanced parens4": {source: ")(", err: NewParseError("Unexpected token", "unbalanced parens4", token{tokenRightParen, 1, 1, ")"})},
+	"unterminated list":  {source: "(a b c d e f g h", err: NewParseError("Unexpected end of file", "unterminated list", token{tokenRightParen, 16, 1, "EOF"})},
+	"unterminated dot":   {source: "(fun . x", err: NewParseError("Unexpected token, expected tokenRightParen", "unterminated dot", token{tokenEOF, 8, 1, "EOF"})},
 }
 
 func TestParser(t *testing.T) {
@@ -201,7 +201,8 @@ func TestParser(t *testing.T) {
 				t.Errorf("%s: expected %v, got %v", name, tc.expr, expr)
 			}
 			_, err = parser.NextExpr()
-			if !errors.Is(err, EOFError{}) {
+			var lispError LispError
+			if errors.As(err, &lispError) && lispError.Type != ErrorEOF {
 				t.Errorf("%s: expected EOF error, got %v", name, err)
 			}
 		}
@@ -217,7 +218,8 @@ func TestParser(t *testing.T) {
 				t.Errorf("%s: expected %v, got %v", name, tc.expr, expr)
 			}
 			_, err = parser.NextExpr()
-			if !errors.Is(err, EOFError{}) {
+			var lispError LispError
+			if errors.As(err, &lispError) && lispError.Type != ErrorEOF {
 				t.Errorf("%s: expected EOF error, got %v", name, err)
 			}
 		}
