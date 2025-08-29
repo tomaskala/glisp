@@ -92,7 +92,7 @@ func (p *Parser) parseList() (Expr, error) {
 // "'" expr
 //
 // "'" is past.
-func (p *Parser) parseQuote() (*Cons, error) {
+func (p *Parser) parseQuote() (Expr, error) {
 	quote := &Atom{"quote"}
 	expr, err := p.NextExpr()
 	if err != nil {
@@ -106,7 +106,7 @@ func (p *Parser) parseQuote() (*Cons, error) {
 // number literal
 //
 // Logic taken from https://cs.opensource.google/go/go/+/master:src/text/template/parse/node.go.
-func (p *Parser) parseNumber(t token) (*Number, error) {
+func (p *Parser) parseNumber(t token) (Expr, error) {
 	isUint := false
 	isInt := false
 	isFloat := false

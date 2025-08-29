@@ -49,8 +49,8 @@ func TestConsString(t *testing.T) {
 
 func TestConsEqual(t *testing.T) {
 	for _, equals := range map[string]struct {
-		fst *Cons
-		snd *Cons
+		fst Expr
+		snd Expr
 	}{
 		"nil":               {Nil, Nil},
 		"single element":    {&Cons{&Atom{"head"}, Nil}, &Cons{&Atom{"head"}, Nil}},
@@ -91,8 +91,8 @@ func TestConsEqual(t *testing.T) {
 	}
 
 	for _, notEquals := range map[string]struct {
-		fst *Cons
-		snd *Cons
+		fst Expr
+		snd Expr
 	}{
 		"nils":            {Nil, &Cons{Nil, Nil}},
 		"different atom":  {&Cons{&Atom{"head1"}, Nil}, &Cons{&Atom{"head2"}, Nil}},

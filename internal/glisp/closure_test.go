@@ -370,7 +370,7 @@ func TestBind(t *testing.T) {
 func TestSliceToCons(t *testing.T) {
 	for _, tc := range map[string]struct {
 		slice []Expr
-		cons  *Cons
+		cons  Expr
 	}{
 		"nil":            {[]Expr{}, Nil},
 		"single element": {[]Expr{&Atom{"a"}}, &Cons{&Atom{"a"}, Nil}},

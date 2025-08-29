@@ -7,12 +7,7 @@ type Cons struct {
 	cdr Expr
 }
 
-var Nil *Cons = nil
-
 func (c *Cons) String() string {
-	if c == Nil {
-		return "()"
-	}
 	var curr Expr = c
 	var sb strings.Builder
 	for sb.WriteByte('('); ; sb.WriteByte(' ') {
@@ -34,9 +29,6 @@ func (c *Cons) String() string {
 }
 
 func (c *Cons) Equal(o Expr) bool {
-	if c == Nil || o == Nil {
-		return c == o
-	}
 	if o, ok := o.(*Cons); ok {
 		return c.car.Equal(o.car) && c.cdr.Equal(o.cdr)
 	}
@@ -44,9 +36,6 @@ func (c *Cons) Equal(o Expr) bool {
 }
 
 func (c *Cons) Eval(env *Env) (Expr, error) {
-	if c == Nil {
-		return Nil, nil
-	}
 	fun, err := c.car.Eval(env)
 	if err != nil {
 		return Nil, err

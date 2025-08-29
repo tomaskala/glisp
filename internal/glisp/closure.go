@@ -40,7 +40,7 @@ func evalArg(arg Expr, env *Env) ([]Expr, error) {
 	curr := arg
 	for {
 		cons, ok := curr.(*Cons)
-		if !ok || cons == Nil {
+		if !ok {
 			break
 		}
 		expr, err := cons.car.Eval(env)
@@ -67,13 +67,12 @@ func bind(param Expr, args []Expr, env *Env) error {
 	i := 0
 	for {
 		switch expr := curr.(type) {
-		case *Cons:
-			if expr == Nil {
-				if i < len(args) {
-					return NewEvalError(fmt.Sprintf("The function expects fewer arguments, %d given", len(args)))
-				}
-				return nil
+		case *NilExpr:
+			if i < len(args) {
+				return NewEvalError(fmt.Sprintf("The function expects fewer arguments, %d given", len(args)))
 			}
+			return nil
+		case *Cons:
 			if atom, ok := expr.car.(*Atom); ok {
 				if i == len(args) {
 					return NewEvalError(fmt.Sprintf("The function expects more arguments, %d given", len(args)))
@@ -96,8 +95,8 @@ func bind(param Expr, args []Expr, env *Env) error {
 	}
 }
 
-func sliceToCons(expr []Expr) *Cons {
-	cons := Nil
+func sliceToCons(expr []Expr) Expr {
+	var cons Expr = Nil
 	for i := len(expr) - 1; i >= 0; i-- {
 		cons = &Cons{expr[i], cons}
 	}
