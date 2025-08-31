@@ -44,13 +44,17 @@ func (b *Builtin) Equal(o Expr) bool {
 }
 
 type Closure struct {
+	name     string
 	param    Expr
 	body     Expr
 	captured map[string]Expr
 }
 
 func (c *Closure) String() string {
-	return fmt.Sprintf("<lambda %s>", c.param.String())
+	if c.name != "" {
+		return fmt.Sprintf("<function %s>", c.name)
+	}
+	return "<lambda>"
 }
 
 func (c *Closure) Equal(o Expr) bool {

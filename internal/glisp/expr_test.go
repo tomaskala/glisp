@@ -61,32 +61,30 @@ func TestBuiltinEqual(t *testing.T) {
 func TestClosureString(t *testing.T) {
 	env := make(map[string]Expr)
 
-	a1 := &Closure{Nil, Nil, env}
-	a2 := &Closure{&Atom{"param"}, Nil, env}
-	a3 := &Closure{&Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}, Nil, env}
+	a1 := &Closure{"", Nil, Nil, env}
+	a2 := &Closure{"", &Atom{"param"}, Nil, env}
+	a3 := &Closure{"", &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}, Nil, env}
+	s := "<lambda>"
 
-	s1 := "<lambda ()>"
-	if a1.String() != s1 {
-		t.Errorf("Expected \"%s\", got \"%s\"", s1, a1.String())
+	if a1.String() != s {
+		t.Errorf("Expected \"%s\", got \"%s\"", s, a1.String())
 	}
 
-	s2 := "<lambda param>"
-	if a2.String() != s2 {
-		t.Errorf("Expected \"%s\", got \"%s\"", s2, a2.String())
+	if a2.String() != s {
+		t.Errorf("Expected \"%s\", got \"%s\"", s, a2.String())
 	}
 
-	s3 := "<lambda (fst snd)>"
-	if a3.String() != s3 {
-		t.Errorf("Expected \"%s\", git \"%s\"", s3, a3.String())
+	if a3.String() != s {
+		t.Errorf("Expected \"%s\", git \"%s\"", s, a3.String())
 	}
 }
 
 func TestClosureEqual(t *testing.T) {
 	env := make(map[string]Expr)
 
-	a11 := &Closure{Nil, Nil, env}
-	a12 := &Closure{Nil, Nil, env}
-	a2 := &Closure{Nil, Nil, env}
+	a11 := &Closure{"", Nil, Nil, env}
+	a12 := &Closure{"", Nil, Nil, env}
+	a2 := &Closure{"", Nil, Nil, env}
 
 	if !a11.Equal(a11) {
 		t.Errorf("Closure must be equal to itself")

@@ -3,17 +3,18 @@ package glisp
 import "fmt"
 
 type Frame struct {
-	name    string          // The name of the function being executed, for error reporting.
+	closure *Closure        // The closure being evaluated.
 	symbols map[string]Expr // The environment in which the function executes.
 }
 
 type Evaluator struct {
-	frames []Frame
+	name   string  // Name of the source being evaluated, used for error reporting.
+	frames []Frame // Frame stack.
 }
 
-func NewEvaluator() *Evaluator {
-	e := &Evaluator{}
-	e.pushFrame(Frame{"global", make(map[string]Expr)})
+func NewEvaluator(name string) *Evaluator {
+	e := &Evaluator{name: name}
+	e.pushFrame(Frame{&Closure{name: "global"}, make(map[string]Expr)})
 	return e
 }
 
@@ -35,7 +36,7 @@ func (e *Evaluator) lookup(atom *Atom) (Expr, error) {
 			return expr, nil
 		}
 	}
-	return Nil, NewEvalError(fmt.Sprintf("Undefined name: '%s'", atom.name))
+	return Nil, NewRuntimeError(e.name, fmt.Sprintf("Undefined name: '%s'", atom.name), e.frames)
 }
 
 func (e *Evaluator) store(atom string, expr Expr) {
@@ -58,7 +59,7 @@ func (e *Evaluator) Eval(expr Expr) (Expr, error) {
 		}
 		return e.apply(fun, expr.cdr)
 	default:
-		return Nil, NewEvalError(fmt.Sprintf("Unrecognized expression type: %v", expr))
+		return Nil, NewRuntimeError(e.name, fmt.Sprintf("Unrecognized expression type: %v", expr), e.frames)
 	}
 }
 
@@ -69,7 +70,7 @@ func (e *Evaluator) apply(callable, arg Expr) (Expr, error) {
 	case *Closure:
 		return e.reduce(callable, arg)
 	default:
-		return Nil, NewEvalError(fmt.Sprintf("Attempting to evaluate %v, expected \"Builtin\" or \"Closure\"", callable))
+		return Nil, NewRuntimeError(e.name, fmt.Sprintf("Attempting to evaluate %v, expected \"Builtin\" or \"Closure\"", callable), e.frames)
 	}
 }
 
@@ -82,7 +83,7 @@ func (e *Evaluator) reduce(fun *Closure, arg Expr) (Expr, error) {
 	for name, value := range fun.captured {
 		closureEnv[name] = value
 	}
-	e.pushFrame(Frame{"<lambda>", closureEnv}) // TODO: Store the name if known
+	e.pushFrame(Frame{fun, closureEnv})
 	defer e.popFrame()
 	if err := e.bind(fun.param, evaluatedArgs); err != nil {
 		return Nil, err
@@ -124,19 +125,19 @@ func (e *Evaluator) bind(param Expr, args []Expr) error {
 		switch expr := curr.(type) {
 		case *NilExpr:
 			if i < len(args) {
-				return NewEvalError(fmt.Sprintf("The function expects fewer arguments, %d given", len(args)))
+				return NewRuntimeError(e.name, fmt.Sprintf("The function expects fewer arguments, %d given", len(args)), e.frames)
 			}
 			return nil
 		case *Cons:
 			if atom, ok := expr.car.(*Atom); ok {
 				if i == len(args) {
-					return NewEvalError(fmt.Sprintf("The function expects more arguments, %d given", len(args)))
+					return NewRuntimeError(e.name, fmt.Sprintf("The function expects more arguments, %d given", len(args)), e.frames)
 				}
 				e.store(atom.name, args[i])
 				curr = expr.cdr
 				i++
 			} else {
-				return NewEvalError(fmt.Sprintf("A list of function parameters must consist of atoms, got %v", expr.car))
+				return NewRuntimeError(e.name, fmt.Sprintf("A list of function parameters must consist of atoms, got %v", expr.car), e.frames)
 			}
 		case *Atom:
 			// Handle the case when the lambda arguments aren't a proper list, such as
@@ -145,7 +146,7 @@ func (e *Evaluator) bind(param Expr, args []Expr) error {
 			e.store(expr.name, sliceToCons(args[i:]))
 			return nil
 		default:
-			return NewEvalError(fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", curr))
+			return NewRuntimeError(e.name, fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", curr), e.frames)
 		}
 	}
 }

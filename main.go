@@ -16,7 +16,7 @@ const (
 	exitSuccess      = 0
 	exitIoError      = 1
 	exitParseError   = 2
-	exitEvalError    = 3
+	exitRuntimeError = 3
 	exitGeneralError = 4
 )
 
@@ -46,7 +46,7 @@ func runRepl() int {
 		return exitIoError
 	}
 	defer rl.Close()
-	evaluator := glisp.NewEvaluator()
+	evaluator := glisp.NewEvaluator("REPL")
 	for {
 		line, err := rl.Readline()
 		if err == readline.ErrInterrupt {
@@ -62,8 +62,7 @@ func runRepl() int {
 		}
 		parser := glisp.NewParser("REPL", line)
 		expr, err := eval(evaluator, parser)
-		var lispError glisp.LispError
-		if errors.As(err, &lispError) && lispError.Type == glisp.ErrorEOF {
+		if errors.Is(err, io.EOF) {
 			fmt.Println(expr)
 		} else {
 			fmt.Printf("%v\n", err)
@@ -78,26 +77,19 @@ func runScript(path string) int {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
 		return exitIoError
 	}
-	evaluator := glisp.NewEvaluator()
+	evaluator := glisp.NewEvaluator(path)
 	parser := glisp.NewParser(path, string(source))
 	_, err = eval(evaluator, parser)
-	var lispError glisp.LispError
-	if errors.As(err, &lispError) {
-		switch lispError.Type {
-		case glisp.ErrorEOF:
-			return exitSuccess
-		case glisp.ErrorParse:
-			fmt.Fprintf(os.Stderr, "%v\n", lispError)
-			return exitParseError
-		case glisp.ErrorEval:
-			fmt.Fprintf(os.Stderr, "%v\n", lispError)
-			return exitEvalError
-		default:
-			fmt.Fprintf(os.Stderr, "Unrecognized lisp error: %v\n", lispError)
-			return exitGeneralError
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+	if errors.Is(err, io.EOF) {
+		return exitSuccess
+	}
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	switch err.(type) {
+	case glisp.ParseError:
+		return exitParseError
+	case glisp.RuntimeError:
+		return exitRuntimeError
+	default:
 		return exitGeneralError
 	}
 }

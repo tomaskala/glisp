@@ -2,6 +2,7 @@ package glisp
 
 import (
 	"errors"
+	"io"
 	"testing"
 )
 
@@ -180,7 +181,7 @@ var complexInputs = map[string]parserTest{
 
 var invalidInputs = map[string]parserTest{
 	// This is valid, but is here so that we can easily check the err field.
-	"empty":              {source: "", err: NewEOFError("empty", token{tokenEOF, 0, 1, "EOF"})},
+	"empty":              {source: "", err: io.EOF},
 	"unbalanced parens1": {source: "(+ 1 2 3", err: NewParseError("Unexpected end of file", "unbalanced parens1", token{tokenEOF, 8, 1, "EOF"})},
 	"unbalanced parens2": {source: "(* (+ 1 2 3) (+ 4 5 6", err: NewParseError("Unexpected end of file", "unbalanced parens2", token{tokenEOF, 21, 1, "EOF"})},
 	"unbalanced parens3": {source: "(((", err: NewParseError("Unexpected end of file", "unbalanced parens3", token{tokenEOF, 3, 1, "EOF"})},
@@ -201,8 +202,7 @@ func TestParser(t *testing.T) {
 				t.Errorf("%s: expected %v, got %v", name, tc.expr, expr)
 			}
 			_, err = parser.NextExpr()
-			var lispError LispError
-			if errors.As(err, &lispError) && lispError.Type != ErrorEOF {
+			if !errors.Is(err, io.EOF) {
 				t.Errorf("%s: expected EOF error, got %v", name, err)
 			}
 		}
@@ -218,8 +218,7 @@ func TestParser(t *testing.T) {
 				t.Errorf("%s: expected %v, got %v", name, tc.expr, expr)
 			}
 			_, err = parser.NextExpr()
-			var lispError LispError
-			if errors.As(err, &lispError) && lispError.Type != ErrorEOF {
+			if !errors.Is(err, io.EOF) {
 				t.Errorf("%s: expected EOF error, got %v", name, err)
 			}
 		}
@@ -228,11 +227,7 @@ func TestParser(t *testing.T) {
 		for name, tc := range invalidInputs {
 			parser := NewParser(name, tc.source)
 			_, err := parser.NextExpr()
-			var lispError LispError
-			if !errors.As(err, &lispError) {
-				t.Fatalf("%s: expected lisp error, got %v", name, err)
-			}
-			if tc.err != lispError {
+			if tc.err != err {
 				t.Errorf("%s: expected error %v, got %v", name, tc.err, err)
 			}
 		}

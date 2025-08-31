@@ -6,7 +6,7 @@ import (
 )
 
 func TestAtomEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestAtomEval")
 
 	trueEval, err := e.Eval(True)
 	if err != nil {
@@ -20,7 +20,7 @@ func TestAtomEval(t *testing.T) {
 	a := &Atom{"atom"}
 	env := make(map[string]Expr)
 	env["atom"] = a
-	e.pushFrame(Frame{"TestAtomEval", env})
+	e.pushFrame(Frame{&Closure{name: "TestAtomEval"}, env})
 
 	aEval, err := e.Eval(a)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestAtomEval(t *testing.T) {
 }
 
 func TestBuiltinEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestBuiltinEval")
 	a := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
 
 	aEval, err := e.Eval(a)
@@ -53,10 +53,10 @@ func TestBuiltinEval(t *testing.T) {
 }
 
 func TestClosureEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestClosureEval")
 
 	env := make(map[string]Expr)
-	a := &Closure{Nil, Nil, env}
+	a := &Closure{"", Nil, Nil, env}
 
 	aEval, err := e.Eval(a)
 	if err != nil {
@@ -172,7 +172,7 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Number{1337}, Nil},
 
-			err: NewEvalError("The function expects more arguments, 1 given"),
+			err: NewRuntimeError("TestReduce", "The function expects more arguments, 1 given", nil),
 		},
 		"too many arguments": {
 			param: &Cons{&Atom{"x"}, &Cons{&Atom{"y"}, Nil}},
@@ -180,7 +180,7 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Atom{"one"}, &Cons{&Number{2}, &Cons{&Number{3}, &Cons{&Number{4}, Nil}}}},
 
-			err: NewEvalError("The function expects fewer arguments, 4 given"),
+			err: NewRuntimeError("TestReduce", "The function expects fewer arguments, 4 given", nil),
 		},
 		"non-atom in parameter list": {
 			param: &Cons{&Atom{"x"}, &Cons{&Number{15}, Nil}},
@@ -188,7 +188,7 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Number{1337}, Nil},
 
-			err: NewEvalError(fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{15})),
+			err: NewRuntimeError("TestReduce", fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{15}), nil),
 		},
 		"non-atom parameter list": {
 			param: &Number{123},
@@ -196,7 +196,7 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Number{1337}, Nil},
 
-			err: NewEvalError(fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", &Number{123})),
+			err: NewRuntimeError("TestReduce", fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", &Number{123}), nil),
 		},
 		"undefined atom in the body": {
 			param: &Cons{&Atom{"x"}, Nil},
@@ -204,11 +204,11 @@ func TestReduce(t *testing.T) {
 
 			arg: &Cons{&Number{1337}, Nil},
 
-			err: NewEvalError(fmt.Sprintf("Undefined name: '%s'", &Atom{"undefined"})),
+			err: NewRuntimeError("TestReduce", fmt.Sprintf("Undefined name: '%s'", &Atom{"undefined"}), nil),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			e := NewEvaluator()
+			e := NewEvaluator("TestReduce")
 			closureEnv := make(map[string]Expr)
 			closureEnv["one"] = &Number{111}
 			closureEnv["two"] = &Number{222}
@@ -216,11 +216,11 @@ func TestReduce(t *testing.T) {
 			argEnv := make(map[string]Expr)
 			argEnv["one"] = &Number{1}
 			argEnv["two"] = &Number{2}
-			e.pushFrame(Frame{"TestReduceArg", argEnv})
+			e.pushFrame(Frame{&Closure{name: "TestReduceArg"}, argEnv})
 
 			closure := &Closure{param: tc.param, body: tc.body, captured: closureEnv}
 			result, err := e.reduce(closure, tc.arg)
-			if err != tc.err {
+			if !runtimeErrorsEqual(err, tc.err) {
 				t.Errorf("Expected error %v, got %v", tc.err, err)
 			}
 
@@ -250,8 +250,8 @@ func TestEvalArg(t *testing.T) {
 		env := make(map[string]Expr)
 		env["fst"] = &Atom{"first atom"}
 		env["snd"] = &Number{127}
-		e := NewEvaluator()
-		e.pushFrame(Frame{"TestEvalArg", env})
+		e := NewEvaluator("TestEvalArg")
+		e.pushFrame(Frame{&Closure{name: "TestEvalArg"}, env})
 
 		for _, tc := range map[string]struct {
 			arg   Expr
@@ -280,7 +280,7 @@ func TestEvalArg(t *testing.T) {
 	})
 
 	t.Run("undefined symbol", func(t *testing.T) {
-		e := NewEvaluator()
+		e := NewEvaluator("TestEvalArg")
 		_, err := e.evalArg(&Cons{&Atom{"a"}, Nil})
 		if err == nil {
 			t.Errorf("Expected error due to undefined \"a\", got no error")
@@ -327,36 +327,36 @@ func TestBind(t *testing.T) {
 		"too few arguments 1": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
 			args:  []Expr{&Number{1}},
-			err:   NewEvalError("The function expects more arguments, 1 given"),
+			err:   NewRuntimeError("TestBind", "The function expects more arguments, 1 given", nil),
 		},
 		"too few arguments 2": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, &Cons{&Atom{"thd"}, &Cons{&Atom{"frh"}, Nil}}}},
 			args:  []Expr{&Number{1}, &Number{2}},
-			err:   NewEvalError("The function expects more arguments, 2 given"),
+			err:   NewRuntimeError("TestBind", "The function expects more arguments, 2 given", nil),
 		},
 		"too many arguments": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
 			args:  []Expr{&Number{1}, &Number{2}, &Number{3}},
-			err:   NewEvalError("The function expects fewer arguments, 3 given"),
+			err:   NewRuntimeError("TestBind", "The function expects fewer arguments, 3 given", nil),
 		},
 		"non-atom in parameter list": {
 			param: &Cons{&Number{1}, Nil},
-			err:   NewEvalError(fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{1})),
+			err:   NewRuntimeError("TestBind", fmt.Sprintf("A list of function parameters must consist of atoms, got %v", &Number{1}), nil),
 		},
 		"non-atom parameter list": {
 			param: &Number{1},
-			err:   NewEvalError(fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", &Number{1})),
+			err:   NewRuntimeError("TestBind", fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", &Number{1}), nil),
 		},
 		"empty parameter list, args given": {
 			param: Nil,
 			args:  []Expr{&Number{1}, &Number{2}},
-			err:   NewEvalError("The function expects fewer arguments, 2 given"),
+			err:   NewRuntimeError("TestBind", "The function expects fewer arguments, 2 given", nil),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			e := NewEvaluator()
+			e := NewEvaluator("TestBind")
 			err := e.bind(tc.param, tc.args)
-			if err != tc.err {
+			if !runtimeErrorsEqual(err, tc.err) {
 				t.Errorf("Expected error %v, got %v", tc.err, err)
 			}
 
@@ -398,7 +398,7 @@ func TestSliceToCons(t *testing.T) {
 }
 
 func TestConsEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestConsEval")
 
 	trueEval, err := e.Eval(True)
 	if err != nil {
@@ -412,7 +412,7 @@ func TestConsEval(t *testing.T) {
 	a := &Atom{"atom"}
 	env := make(map[string]Expr)
 	env["atom"] = a
-	e.pushFrame(Frame{"TestConsEval", env})
+	e.pushFrame(Frame{&Closure{name: "TestConsEval"}, env})
 
 	aEval, err := e.Eval(a)
 	if err != nil {
@@ -431,7 +431,7 @@ func TestConsEval(t *testing.T) {
 }
 
 func TestNilEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestNilEval")
 	n := Nil
 
 	nEval, err := e.Eval(n)
@@ -445,7 +445,7 @@ func TestNilEval(t *testing.T) {
 }
 
 func TestNumberEval(t *testing.T) {
-	e := NewEvaluator()
+	e := NewEvaluator("TestNumberEval")
 	a := &Number{123}
 
 	aEval, err := e.Eval(a)
@@ -456,4 +456,19 @@ func TestNumberEval(t *testing.T) {
 	if aEval != a {
 		t.Errorf("Number evaluated to something else than itself: %v", aEval)
 	}
+}
+
+func runtimeErrorsEqual(err1, err2 error) bool {
+	if err1 == nil && err2 == nil {
+		return true
+	}
+	runtimeError1, ok := err1.(RuntimeError)
+	if !ok {
+		return false
+	}
+	runtimeError2, ok := err2.(RuntimeError)
+	if !ok {
+		return false
+	}
+	return runtimeError1.name == runtimeError2.name && runtimeError1.msg == runtimeError2.msg
 }
