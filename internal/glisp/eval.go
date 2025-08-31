@@ -2,7 +2,47 @@ package glisp
 
 import "fmt"
 
-func Eval(expr Expr, env *Env) (Expr, error) {
+type Frame struct {
+	name    string          // The name of the function being executed, for error reporting.
+	symbols map[string]Expr // The environment in which the function executes.
+}
+
+type Evaluator struct {
+	frames []Frame
+}
+
+func NewEvaluator() *Evaluator {
+	e := &Evaluator{}
+	e.pushFrame(Frame{"global", make(map[string]Expr)})
+	return e
+}
+
+func (e *Evaluator) currentFrame() *Frame {
+	return &e.frames[len(e.frames)-1]
+}
+
+func (e *Evaluator) pushFrame(frame Frame) {
+	e.frames = append(e.frames, frame)
+}
+
+func (e *Evaluator) popFrame() {
+	e.frames = e.frames[:len(e.frames)-1]
+}
+
+func (e *Evaluator) lookup(atom *Atom) (Expr, error) {
+	for i := len(e.frames) - 1; i >= 0; i-- {
+		if expr, ok := e.frames[i].symbols[atom.name]; ok {
+			return expr, nil
+		}
+	}
+	return Nil, NewEvalError(fmt.Sprintf("Undefined name: '%s'", atom.name))
+}
+
+func (e *Evaluator) store(atom string, expr Expr) {
+	e.currentFrame().symbols[atom] = expr
+}
+
+func (e *Evaluator) Eval(expr Expr) (Expr, error) {
 	switch expr := expr.(type) {
 	case *Builtin, *Closure, *NilExpr, *Number:
 		return expr, nil
@@ -10,46 +50,47 @@ func Eval(expr Expr, env *Env) (Expr, error) {
 		if expr == True {
 			return True, nil
 		}
-		val, err := env.Get(expr)
-		if err != nil {
-			return Nil, err
-		}
-		return val, nil
+		return e.lookup(expr)
 	case *Cons:
-		fun, err := Eval(expr.car, env)
+		fun, err := e.Eval(expr.car)
 		if err != nil {
 			return Nil, err
 		}
-		return apply(fun, expr.cdr, env)
+		return e.apply(fun, expr.cdr)
 	default:
 		return Nil, NewEvalError(fmt.Sprintf("Unrecognized expression type: %v", expr))
 	}
 }
 
-func apply(callable, arg Expr, env *Env) (Expr, error) {
+func (e *Evaluator) apply(callable, arg Expr) (Expr, error) {
 	switch callable := callable.(type) {
 	case *Builtin:
-		return callable.fun(arg, env)
+		return callable.fun(arg, e.currentFrame())
 	case *Closure:
-		return reduce(callable, arg, env)
+		return e.reduce(callable, arg)
 	default:
 		return Nil, NewEvalError(fmt.Sprintf("Attempting to evaluate %v, expected \"Builtin\" or \"Closure\"", callable))
 	}
 }
 
-func reduce(fun *Closure, arg Expr, env *Env) (Expr, error) {
-	evaluatedArgs, err := evalArg(arg, env)
+func (e *Evaluator) reduce(fun *Closure, arg Expr) (Expr, error) {
+	evaluatedArgs, err := e.evalArg(arg)
 	if err != nil {
 		return Nil, err
 	}
-	closureEnv := NewEnv(fun.env)
-	if err := bind(fun.param, evaluatedArgs, closureEnv); err != nil {
+	closureEnv := make(map[string]Expr)
+	for name, value := range fun.captured {
+		closureEnv[name] = value
+	}
+	e.pushFrame(Frame{"<lambda>", closureEnv}) // TODO: Store the name if known
+	defer e.popFrame()
+	if err := e.bind(fun.param, evaluatedArgs); err != nil {
 		return Nil, err
 	}
-	return Eval(fun.body, closureEnv)
+	return e.Eval(fun.body)
 }
 
-func evalArg(arg Expr, env *Env) ([]Expr, error) {
+func (e *Evaluator) evalArg(arg Expr) ([]Expr, error) {
 	var result []Expr
 	curr := arg
 	for {
@@ -57,7 +98,7 @@ func evalArg(arg Expr, env *Env) ([]Expr, error) {
 		if !ok {
 			break
 		}
-		expr, err := Eval(cons.car, env)
+		expr, err := e.Eval(cons.car)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +108,7 @@ func evalArg(arg Expr, env *Env) ([]Expr, error) {
 	// Handle the case when a lambda is applied to a list of arguments, such as
 	// (f . args).
 	if atom, ok := curr.(*Atom); ok {
-		expr, err := env.Get(atom)
+		expr, err := e.lookup(atom)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +117,7 @@ func evalArg(arg Expr, env *Env) ([]Expr, error) {
 	return result, nil
 }
 
-func bind(param Expr, args []Expr, env *Env) error {
+func (e *Evaluator) bind(param Expr, args []Expr) error {
 	curr := param
 	i := 0
 	for {
@@ -91,7 +132,7 @@ func bind(param Expr, args []Expr, env *Env) error {
 				if i == len(args) {
 					return NewEvalError(fmt.Sprintf("The function expects more arguments, %d given", len(args)))
 				}
-				env.Set(atom.name, args[i])
+				e.store(atom.name, args[i])
 				curr = expr.cdr
 				i++
 			} else {
@@ -101,7 +142,7 @@ func bind(param Expr, args []Expr, env *Env) error {
 			// Handle the case when the lambda arguments aren't a proper list, such as
 			// (lambda args args) or (lambda (x . args) args), in which case all the remaining
 			// arguments have to be bound to the last parameter.
-			env.Set(expr.name, sliceToCons(args[i:]))
+			e.store(expr.name, sliceToCons(args[i:]))
 			return nil
 		default:
 			return NewEvalError(fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", curr))

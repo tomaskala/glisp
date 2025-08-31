@@ -20,7 +20,7 @@ const (
 	exitGeneralError = 4
 )
 
-func eval(env *glisp.Env, parser *glisp.Parser) (glisp.Expr, error) {
+func eval(evaluator *glisp.Evaluator, parser *glisp.Parser) (glisp.Expr, error) {
 	var result glisp.Expr
 	for {
 		expr, err := parser.NextExpr()
@@ -28,7 +28,7 @@ func eval(env *glisp.Env, parser *glisp.Parser) (glisp.Expr, error) {
 			// We will eventually hit this case because the parser will return an EOF error.
 			return result, err
 		}
-		result, err = glisp.Eval(expr, env)
+		result, err = evaluator.Eval(expr)
 		if err != nil {
 			return result, err
 		}
@@ -46,7 +46,7 @@ func runRepl() int {
 		return exitIoError
 	}
 	defer rl.Close()
-	global := glisp.NewEnv(nil)
+	evaluator := glisp.NewEvaluator()
 	for {
 		line, err := rl.Readline()
 		if err == readline.ErrInterrupt {
@@ -61,7 +61,7 @@ func runRepl() int {
 			return exitIoError
 		}
 		parser := glisp.NewParser("REPL", line)
-		expr, err := eval(global, parser)
+		expr, err := eval(evaluator, parser)
 		var lispError glisp.LispError
 		if errors.As(err, &lispError) && lispError.Type == glisp.ErrorEOF {
 			fmt.Println(expr)
@@ -78,9 +78,9 @@ func runScript(path string) int {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
 		return exitIoError
 	}
-	global := glisp.NewEnv(nil)
+	evaluator := glisp.NewEvaluator()
 	parser := glisp.NewParser(path, string(source))
-	_, err = eval(global, parser)
+	_, err = eval(evaluator, parser)
 	var lispError glisp.LispError
 	if errors.As(err, &lispError) {
 		switch lispError.Type {

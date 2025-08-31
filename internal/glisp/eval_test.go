@@ -6,9 +6,9 @@ import (
 )
 
 func TestAtomEval(t *testing.T) {
-	env := NewEnv(nil)
+	e := NewEvaluator()
 
-	trueEval, err := Eval(True, env)
+	trueEval, err := e.Eval(True)
 	if err != nil {
 		t.Fatalf("Error when evaluating True: %v", err)
 	}
@@ -18,9 +18,11 @@ func TestAtomEval(t *testing.T) {
 	}
 
 	a := &Atom{"atom"}
-	env.Set("atom", a)
+	env := make(map[string]Expr)
+	env["atom"] = a
+	e.pushFrame(Frame{"TestAtomEval", env})
 
-	aEval, err := Eval(a, env)
+	aEval, err := e.Eval(a)
 	if err != nil {
 		t.Fatalf("Error when evaluating an atom: %v", err)
 	}
@@ -30,18 +32,17 @@ func TestAtomEval(t *testing.T) {
 	}
 
 	b := &Atom{"another"}
-	bEval, err := Eval(b, env)
+	bEval, err := e.Eval(b)
 	if err == nil {
 		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
 	}
 }
 
 func TestBuiltinEval(t *testing.T) {
-	env := NewEnv(nil)
+	e := NewEvaluator()
+	a := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
 
-	a := &Builtin{"first", func(e Expr, env *Env) (Expr, error) { return e, nil }}
-
-	aEval, err := Eval(a, env)
+	aEval, err := e.Eval(a)
 	if err != nil {
 		t.Fatalf("Error when evaluating a builtin: %v", err)
 	}
@@ -52,10 +53,12 @@ func TestBuiltinEval(t *testing.T) {
 }
 
 func TestClosureEval(t *testing.T) {
-	env := NewEnv(nil)
+	e := NewEvaluator()
+
+	env := make(map[string]Expr)
 	a := &Closure{Nil, Nil, env}
 
-	aEval, err := Eval(a, env)
+	aEval, err := e.Eval(a)
 	if err != nil {
 		t.Fatalf("Error when evaluating a closure: %v", err)
 	}
@@ -205,16 +208,18 @@ func TestReduce(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			closureEnv := NewEnv(nil)
-			closureEnv.Set("one", &Number{111})
-			closureEnv.Set("two", &Number{222})
+			e := NewEvaluator()
+			closureEnv := make(map[string]Expr)
+			closureEnv["one"] = &Number{111}
+			closureEnv["two"] = &Number{222}
 
-			argEnv := NewEnv(nil)
-			argEnv.Set("one", &Number{1})
-			argEnv.Set("two", &Number{2})
+			argEnv := make(map[string]Expr)
+			argEnv["one"] = &Number{1}
+			argEnv["two"] = &Number{2}
+			e.pushFrame(Frame{"TestReduceArg", argEnv})
 
-			closure := &Closure{param: tc.param, body: tc.body, env: closureEnv}
-			result, err := reduce(closure, tc.arg, argEnv)
+			closure := &Closure{param: tc.param, body: tc.body, captured: closureEnv}
+			result, err := e.reduce(closure, tc.arg)
 			if err != tc.err {
 				t.Errorf("Expected error %v, got %v", tc.err, err)
 			}
@@ -242,9 +247,11 @@ func TestEvalArg(t *testing.T) {
 	}
 
 	t.Run("no error", func(t *testing.T) {
-		env := NewEnv(nil)
-		env.Set("fst", &Atom{"first atom"})
-		env.Set("snd", &Number{127})
+		env := make(map[string]Expr)
+		env["fst"] = &Atom{"first atom"}
+		env["snd"] = &Number{127}
+		e := NewEvaluator()
+		e.pushFrame(Frame{"TestEvalArg", env})
 
 		for _, tc := range map[string]struct {
 			arg   Expr
@@ -262,7 +269,7 @@ func TestEvalArg(t *testing.T) {
 				[]Expr{&Number{99}, &Atom{"first atom"}, &Number{127}},
 			},
 		} {
-			result, err := evalArg(tc.arg, env)
+			result, err := e.evalArg(tc.arg)
 			if err != nil {
 				t.Errorf("Expected nil error, got %v", err)
 			}
@@ -273,9 +280,8 @@ func TestEvalArg(t *testing.T) {
 	})
 
 	t.Run("undefined symbol", func(t *testing.T) {
-		env := NewEnv(nil)
-
-		_, err := evalArg(&Cons{&Atom{"a"}, Nil}, env)
+		e := NewEvaluator()
+		_, err := e.evalArg(&Cons{&Atom{"a"}, Nil})
 		if err == nil {
 			t.Errorf("Expected error due to undefined \"a\", got no error")
 		}
@@ -348,8 +354,8 @@ func TestBind(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			env := NewEnv(nil)
-			err := bind(tc.param, tc.args, env)
+			e := NewEvaluator()
+			err := e.bind(tc.param, tc.args)
 			if err != tc.err {
 				t.Errorf("Expected error %v, got %v", tc.err, err)
 			}
@@ -359,7 +365,7 @@ func TestBind(t *testing.T) {
 			}
 
 			for i, param := range tc.paramsList {
-				val, err := env.Get(&Atom{param})
+				val, err := e.lookup(&Atom{param})
 				if err != nil {
 					t.Errorf("The parameter %s is unbound", param)
 				}
@@ -392,9 +398,9 @@ func TestSliceToCons(t *testing.T) {
 }
 
 func TestConsEval(t *testing.T) {
-	env := NewEnv(nil)
+	e := NewEvaluator()
 
-	trueEval, err := Eval(True, env)
+	trueEval, err := e.Eval(True)
 	if err != nil {
 		t.Fatalf("Error when evaluating True: %v", err)
 	}
@@ -404,9 +410,11 @@ func TestConsEval(t *testing.T) {
 	}
 
 	a := &Atom{"atom"}
-	env.Set("atom", a)
+	env := make(map[string]Expr)
+	env["atom"] = a
+	e.pushFrame(Frame{"TestConsEval", env})
 
-	aEval, err := Eval(a, env)
+	aEval, err := e.Eval(a)
 	if err != nil {
 		t.Fatalf("Error when evaluating an atom: %v", err)
 	}
@@ -416,18 +424,17 @@ func TestConsEval(t *testing.T) {
 	}
 
 	b := &Atom{"another"}
-	bEval, err := Eval(b, env)
+	bEval, err := e.Eval(b)
 	if err == nil {
 		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
 	}
 }
 
 func TestNilEval(t *testing.T) {
-	env := NewEnv(nil)
-
+	e := NewEvaluator()
 	n := Nil
 
-	nEval, err := Eval(n, env)
+	nEval, err := e.Eval(n)
 	if err != nil {
 		t.Fatalf("Error when evaluating nil: %v", err)
 	}
@@ -438,11 +445,10 @@ func TestNilEval(t *testing.T) {
 }
 
 func TestNumberEval(t *testing.T) {
-	env := NewEnv(nil)
-
+	e := NewEvaluator()
 	a := &Number{123}
 
-	aEval, err := Eval(a, env)
+	aEval, err := e.Eval(a)
 	if err != nil {
 		t.Fatalf("Error when evaluating a number: %v", err)
 	}

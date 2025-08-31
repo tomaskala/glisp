@@ -31,8 +31,8 @@ func TestAtomEqual(t *testing.T) {
 }
 
 func TestBuiltinString(t *testing.T) {
-	a1 := &Builtin{"first", func(e Expr, env *Env) (Expr, error) { return e, nil }}
-	a2 := &Builtin{"second", func(e Expr, env *Env) (Expr, error) { return e, nil }}
+	a1 := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
+	a2 := &Builtin{"second", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
 
 	if a1.String() != "first" {
 		t.Errorf("Expected \"first\", got \"%s\"", a1.String())
@@ -43,9 +43,9 @@ func TestBuiltinString(t *testing.T) {
 }
 
 func TestBuiltinEqual(t *testing.T) {
-	a11 := &Builtin{"first", func(e Expr, env *Env) (Expr, error) { return e, nil }}
-	a12 := &Builtin{"first", func(e Expr, env *Env) (Expr, error) { return e, nil }}
-	a2 := &Builtin{"second", func(e Expr, env *Env) (Expr, error) { return e, nil }}
+	a11 := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
+	a12 := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
+	a2 := &Builtin{"second", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
 
 	if !a11.Equal(a11) {
 		t.Errorf("Builtin must be equal to itself")
@@ -59,7 +59,7 @@ func TestBuiltinEqual(t *testing.T) {
 }
 
 func TestClosureString(t *testing.T) {
-	env := NewEnv(nil)
+	env := make(map[string]Expr)
 
 	a1 := &Closure{Nil, Nil, env}
 	a2 := &Closure{&Atom{"param"}, Nil, env}
@@ -82,7 +82,7 @@ func TestClosureString(t *testing.T) {
 }
 
 func TestClosureEqual(t *testing.T) {
-	env := NewEnv(nil)
+	env := make(map[string]Expr)
 
 	a11 := &Closure{Nil, Nil, env}
 	a12 := &Closure{Nil, Nil, env}

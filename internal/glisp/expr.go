@@ -29,7 +29,7 @@ func (a *Atom) Equal(o Expr) bool {
 
 type Builtin struct {
 	name string
-	fun  func(Expr, *Env) (Expr, error)
+	fun  func(Expr, *Frame) (Expr, error)
 }
 
 func (b *Builtin) String() string {
@@ -44,9 +44,9 @@ func (b *Builtin) Equal(o Expr) bool {
 }
 
 type Closure struct {
-	param Expr
-	body  Expr
-	env   *Env
+	param    Expr
+	body     Expr
+	captured map[string]Expr
 }
 
 func (c *Closure) String() string {
