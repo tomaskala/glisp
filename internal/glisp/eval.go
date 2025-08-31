@@ -12,9 +12,12 @@ type Evaluator struct {
 	frames []Frame // Frame stack.
 }
 
-func NewEvaluator(name string) *Evaluator {
+func NewEvaluator(name string, builtins map[string]Expr) *Evaluator {
+	if builtins == nil {
+		builtins = make(map[string]Expr)
+	}
 	e := &Evaluator{name: name}
-	e.pushFrame(Frame{&Closure{name: "global"}, make(map[string]Expr)})
+	e.pushFrame(Frame{&Closure{name: "global"}, builtins})
 	return e
 }
 
@@ -36,11 +39,19 @@ func (e *Evaluator) lookup(atom *Atom) (Expr, error) {
 			return expr, nil
 		}
 	}
-	return Nil, NewRuntimeError(e.name, fmt.Sprintf("Undefined name: '%s'", atom.name), e.frames)
+	return Nil, e.runtimeError("Undefined name: '%s'", atom.name)
 }
 
 func (e *Evaluator) store(atom string, expr Expr) {
 	e.currentFrame().symbols[atom] = expr
+}
+
+func (e *Evaluator) storeGlobal(atom string, expr Expr) {
+	e.frames[0].symbols[atom] = expr
+}
+
+func (e *Evaluator) runtimeError(format string, args ...any) error {
+	return NewRuntimeError(e.name, fmt.Sprintf(format, args...), e.frames)
 }
 
 func (e *Evaluator) Eval(expr Expr) (Expr, error) {
@@ -59,23 +70,23 @@ func (e *Evaluator) Eval(expr Expr) (Expr, error) {
 		}
 		return e.apply(fun, expr.cdr)
 	default:
-		return Nil, NewRuntimeError(e.name, fmt.Sprintf("Unrecognized expression type: %v", expr), e.frames)
+		return Nil, e.runtimeError("Unrecognized expression type: %v", expr)
 	}
 }
 
 func (e *Evaluator) apply(callable, arg Expr) (Expr, error) {
 	switch callable := callable.(type) {
 	case *Builtin:
-		return callable.fun(arg, e.currentFrame())
+		return callable.fun(arg, e)
 	case *Closure:
 		return e.reduce(callable, arg)
 	default:
-		return Nil, NewRuntimeError(e.name, fmt.Sprintf("Attempting to evaluate %v, expected \"Builtin\" or \"Closure\"", callable), e.frames)
+		return Nil, e.runtimeError("Attempting to evaluate %v, expected a builtin or a closure", callable)
 	}
 }
 
 func (e *Evaluator) reduce(fun *Closure, arg Expr) (Expr, error) {
-	evaluatedArgs, err := e.evalArg(arg)
+	evaluatedArgs, err := e.evalList(arg)
 	if err != nil {
 		return Nil, err
 	}
@@ -91,70 +102,84 @@ func (e *Evaluator) reduce(fun *Closure, arg Expr) (Expr, error) {
 	return e.Eval(fun.body)
 }
 
-func (e *Evaluator) evalArg(arg Expr) ([]Expr, error) {
-	var result []Expr
-	curr := arg
+func (e *Evaluator) evalList(arg Expr) (Expr, error) {
+	var list Expr = Nil
+	curr := &list
 	for {
-		cons, ok := curr.(*Cons)
-		if !ok {
+		if cons, ok := arg.(*Cons); ok {
+			val, err := e.Eval(cons.car)
+			if err != nil {
+				return Nil, err
+			}
+			next := &Cons{val, Nil}
+			*curr = next
+			curr = &next.cdr
+			arg = cons.cdr
+		} else {
 			break
 		}
-		expr, err := e.Eval(cons.car)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, expr)
-		curr = cons.cdr
 	}
-	// Handle the case when a lambda is applied to a list of arguments, such as
-	// (f . args).
-	if atom, ok := curr.(*Atom); ok {
-		expr, err := e.lookup(atom)
+	if atom, ok := arg.(*Atom); ok {
+		var err error
+		*curr, err = e.lookup(atom)
 		if err != nil {
-			return nil, err
+			return Nil, err
 		}
-		result = append(result, expr)
 	}
-	return result, nil
+	return list, nil
 }
 
-func (e *Evaluator) bind(param Expr, args []Expr) error {
-	curr := param
-	i := 0
+func (e *Evaluator) bind(param Expr, args Expr) error {
+	currParam := param
+	currArg := args
+	totalArgs := 0
 	for {
-		switch expr := curr.(type) {
+		switch expr := currParam.(type) {
 		case *NilExpr:
-			if i < len(args) {
-				return NewRuntimeError(e.name, fmt.Sprintf("The function expects fewer arguments, %d given", len(args)), e.frames)
+			// No more parameters - check if we have remaining arguments
+			if currArg != Nil {
+				// Count remaining arguments for error message
+				temp := currArg
+				for temp != Nil {
+					if cons, ok := temp.(*Cons); ok {
+						totalArgs++
+						temp = cons.cdr
+					} else {
+						totalArgs++
+						break
+					}
+				}
+				return e.runtimeError("The function expects fewer arguments, %d given", totalArgs)
 			}
 			return nil
 		case *Cons:
-			if atom, ok := expr.car.(*Atom); ok {
-				if i == len(args) {
-					return NewRuntimeError(e.name, fmt.Sprintf("The function expects more arguments, %d given", len(args)), e.frames)
-				}
-				e.store(atom.name, args[i])
-				curr = expr.cdr
-				i++
+			// Regular parameter in parameter list
+			atom, ok := expr.car.(*Atom)
+			if !ok {
+				return e.runtimeError("A list of function parameters must consist of atoms, got %v", expr.car)
+			}
+			// Check if we have an argument available
+			if currArg == Nil {
+				return e.runtimeError("The function expects more arguments, %d given", totalArgs)
+			}
+			if argCons, ok := currArg.(*Cons); ok {
+				// Bind the parameter to the argument
+				e.store(atom.name, argCons.car)
+				currParam = expr.cdr
+				currArg = argCons.cdr
+				totalArgs++
 			} else {
-				return NewRuntimeError(e.name, fmt.Sprintf("A list of function parameters must consist of atoms, got %v", expr.car), e.frames)
+				// This shouldn't happen with proper evalList, but handle it
+				e.store(atom.name, currArg)
+				currParam = expr.cdr
+				currArg = Nil
 			}
 		case *Atom:
-			// Handle the case when the lambda arguments aren't a proper list, such as
-			// (lambda args args) or (lambda (x . args) args), in which case all the remaining
-			// arguments have to be bound to the last parameter.
-			e.store(expr.name, sliceToCons(args[i:]))
+			// Rest parameter - bind all remaining arguments to this parameter
+			e.store(expr.name, currArg)
 			return nil
 		default:
-			return NewRuntimeError(e.name, fmt.Sprintf("Function parameter must be either an atom or a list of atoms, got %v", curr), e.frames)
+			return e.runtimeError("Function parameter must be either an atom or a list of atoms, got %v", currParam)
 		}
 	}
-}
-
-func sliceToCons(expr []Expr) Expr {
-	var cons Expr = Nil
-	for i := len(expr) - 1; i >= 0; i-- {
-		cons = &Cons{expr[i], cons}
-	}
-	return cons
 }

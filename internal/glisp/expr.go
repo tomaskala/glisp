@@ -29,7 +29,7 @@ func (a *Atom) Equal(o Expr) bool {
 
 type Builtin struct {
 	name string
-	fun  func(Expr, *Frame) (Expr, error)
+	fun  func(Expr, *Evaluator) (Expr, error)
 }
 
 func (b *Builtin) String() string {

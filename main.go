@@ -35,8 +35,20 @@ func eval(evaluator *glisp.Evaluator, parser *glisp.Parser) (glisp.Expr, error) 
 	}
 }
 
+func makeCompletionHints(builtins map[string]glisp.Expr) []readline.PrefixCompleterInterface {
+	var hints []readline.PrefixCompleterInterface
+	for name := range builtins {
+		// Store a hint both for "<builtin>" and for "(<builtin>", so that they can easily
+		// be referenced when storing them as well as when calling them.
+		hints = append(hints, readline.PcItem(name))
+		hints = append(hints, readline.PcItem(fmt.Sprintf("(%s", name)))
+	}
+	return hints
+}
+
 func runRepl() int {
-	completer := readline.NewPrefixCompleter()
+	builtins := glisp.LoadBuiltins()
+	completer := readline.NewPrefixCompleter(makeCompletionHints(builtins)...)
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       "λ ",
 		AutoComplete: completer,
@@ -46,7 +58,7 @@ func runRepl() int {
 		return exitIoError
 	}
 	defer rl.Close()
-	evaluator := glisp.NewEvaluator("REPL")
+	evaluator := glisp.NewEvaluator("REPL", builtins)
 	for {
 		line, err := rl.Readline()
 		if err == readline.ErrInterrupt {
@@ -77,7 +89,8 @@ func runScript(path string) int {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
 		return exitIoError
 	}
-	evaluator := glisp.NewEvaluator(path)
+	builtins := glisp.LoadBuiltins()
+	evaluator := glisp.NewEvaluator(path, builtins)
 	parser := glisp.NewParser(path, string(source))
 	_, err = eval(evaluator, parser)
 	if errors.Is(err, io.EOF) {

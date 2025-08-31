@@ -227,7 +227,7 @@ func TestParser(t *testing.T) {
 		for name, tc := range invalidInputs {
 			parser := NewParser(name, tc.source)
 			_, err := parser.NextExpr()
-			if tc.err != err {
+			if !errors.Is(err, tc.err) {
 				t.Errorf("%s: expected error %v, got %v", name, tc.err, err)
 			}
 		}

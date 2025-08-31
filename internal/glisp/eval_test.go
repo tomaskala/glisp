@@ -6,7 +6,7 @@ import (
 )
 
 func TestAtomEval(t *testing.T) {
-	e := NewEvaluator("TestAtomEval")
+	e := NewEvaluator("TestAtomEval", nil)
 
 	trueEval, err := e.Eval(True)
 	if err != nil {
@@ -32,15 +32,16 @@ func TestAtomEval(t *testing.T) {
 	}
 
 	b := &Atom{"another"}
-	bEval, err := e.Eval(b)
-	if err == nil {
-		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
+	_, err = e.Eval(b)
+	expectedErr := NewRuntimeError("TestAtomEval", "Undefined name: 'another'", nil)
+	if !runtimeErrorsEqual(err, expectedErr) {
+		t.Errorf("Expected error %v when evaluating an undefined atom, got %v", expectedErr, err)
 	}
 }
 
 func TestBuiltinEval(t *testing.T) {
-	e := NewEvaluator("TestBuiltinEval")
-	a := &Builtin{"first", func(e Expr, frame *Frame) (Expr, error) { return e, nil }}
+	e := NewEvaluator("TestBuiltinEval", nil)
+	a := &Builtin{"first", func(e Expr, evaluator *Evaluator) (Expr, error) { return e, nil }}
 
 	aEval, err := e.Eval(a)
 	if err != nil {
@@ -53,7 +54,7 @@ func TestBuiltinEval(t *testing.T) {
 }
 
 func TestClosureEval(t *testing.T) {
-	e := NewEvaluator("TestClosureEval")
+	e := NewEvaluator("TestClosureEval", nil)
 
 	env := make(map[string]Expr)
 	a := &Closure{"", Nil, Nil, env}
@@ -208,7 +209,7 @@ func TestReduce(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			e := NewEvaluator("TestReduce")
+			e := NewEvaluator("TestReduce", nil)
 			closureEnv := make(map[string]Expr)
 			closureEnv["one"] = &Number{111}
 			closureEnv["two"] = &Number{222}
@@ -231,58 +232,45 @@ func TestReduce(t *testing.T) {
 	}
 }
 
-func TestEvalArg(t *testing.T) {
-	slicesEqual := func(s1, s2 []Expr) bool {
-		if len(s1) != len(s2) {
-			return false
-		}
-
-		for i := range s1 {
-			if !s1[i].Equal(s2[i]) {
-				return false
-			}
-		}
-
-		return true
-	}
-
+func TestEvalList(t *testing.T) {
 	t.Run("no error", func(t *testing.T) {
 		env := make(map[string]Expr)
-		env["fst"] = &Atom{"first atom"}
+		env["fst"] = &Atom{"first-atom"}
 		env["snd"] = &Number{127}
-		e := NewEvaluator("TestEvalArg")
+		e := NewEvaluator("TestEvalArg", nil)
 		e.pushFrame(Frame{&Closure{name: "TestEvalArg"}, env})
 
 		for _, tc := range map[string]struct {
 			arg   Expr
-			slice []Expr
+			slice Expr
 		}{
-			"nil":           {Nil, []Expr{}},
-			"single atom":   {&Atom{"fst"}, []Expr{&Atom{"first atom"}}},
-			"single number": {&Cons{&Number{99}, Nil}, []Expr{&Number{99}}},
+			"nil":           {Nil, Nil},
+			"single atom":   {&Atom{"fst"}, &Atom{"first-atom"}},
+			"single number": {&Cons{&Number{99}, Nil}, &Cons{&Number{99}, Nil}},
 			"multiple atoms and numbers, proper list": {
 				&Cons{&Number{99}, &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}},
-				[]Expr{&Number{99}, &Atom{"first atom"}, &Number{127}},
+				&Cons{&Number{99}, &Cons{&Atom{"first-atom"}, &Cons{&Number{127}, Nil}}},
 			},
 			"multiple atoms and numbers, improper list": {
-				&Cons{&Number{99}, &Cons{&Atom{"fst"}, &Atom{"snd"}}},
-				[]Expr{&Number{99}, &Atom{"first atom"}, &Number{127}},
+				&Cons{&Number{99}, &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}}},
+				&Cons{&Number{99}, &Cons{&Atom{"first-atom"}, &Cons{&Number{127}, Nil}}},
 			},
 		} {
-			result, err := e.evalArg(tc.arg)
+			result, err := e.evalList(tc.arg)
 			if err != nil {
 				t.Errorf("Expected nil error, got %v", err)
 			}
-			if !slicesEqual(tc.slice, result) {
+			if !tc.slice.Equal(result) {
 				t.Errorf("evalArg(%v): expected %v, got %v", tc.arg, tc.slice, result)
 			}
 		}
 	})
 
 	t.Run("undefined symbol", func(t *testing.T) {
-		e := NewEvaluator("TestEvalArg")
-		_, err := e.evalArg(&Cons{&Atom{"a"}, Nil})
-		if err == nil {
+		e := NewEvaluator("TestEvalArg", nil)
+		_, err := e.evalList(&Cons{&Atom{"a"}, Nil})
+		expectedErr := NewRuntimeError("TestEvalArg", "Undefined name: 'a'", nil)
+		if !runtimeErrorsEqual(err, expectedErr) {
 			t.Errorf("Expected error due to undefined \"a\", got no error")
 		}
 	})
@@ -291,7 +279,7 @@ func TestEvalArg(t *testing.T) {
 func TestBind(t *testing.T) {
 	for name, tc := range map[string]struct {
 		param Expr
-		args  []Expr
+		args  Expr
 
 		paramsList   []string
 		expectedVals []Expr
@@ -299,44 +287,45 @@ func TestBind(t *testing.T) {
 	}{
 		"no parameters": {
 			param: Nil,
+			args:  Nil,
 		},
 		"single parameter": {
 			param:        &Cons{&Atom{"fst"}, Nil},
-			args:         []Expr{&Number{1}},
+			args:         &Cons{&Number{1}, Nil},
 			paramsList:   []string{"fst"},
 			expectedVals: []Expr{&Number{1}},
 		},
 		"multiple parameters": {
 			param:        &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
-			args:         []Expr{&Number{10}, &Number{20}},
+			args:         &Cons{&Number{10}, &Cons{&Number{20}, Nil}},
 			paramsList:   []string{"fst", "snd"},
 			expectedVals: []Expr{&Number{10}, &Number{20}},
 		},
 		"improper parameter list": {
 			param:        &Cons{&Atom{"head"}, &Atom{"tail"}},
-			args:         []Expr{&Number{10}, &Number{20}},
+			args:         &Cons{&Number{10}, &Cons{&Number{20}, Nil}},
 			paramsList:   []string{"head", "tail"},
 			expectedVals: []Expr{&Number{10}, &Cons{&Number{20}, Nil}},
 		},
 		"improper parameter list, empty tail": {
 			param:        &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, &Atom{"rest"}}},
-			args:         []Expr{&Number{10}, &Number{20}},
+			args:         &Cons{&Number{10}, &Cons{&Number{20}, Nil}},
 			paramsList:   []string{"fst", "snd", "rest"},
 			expectedVals: []Expr{&Number{10}, &Number{20}, Nil},
 		},
 		"too few arguments 1": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
-			args:  []Expr{&Number{1}},
+			args:  &Cons{&Number{1}, Nil},
 			err:   NewRuntimeError("TestBind", "The function expects more arguments, 1 given", nil),
 		},
 		"too few arguments 2": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, &Cons{&Atom{"thd"}, &Cons{&Atom{"frh"}, Nil}}}},
-			args:  []Expr{&Number{1}, &Number{2}},
+			args:  &Cons{&Number{1}, &Cons{&Number{2}, Nil}},
 			err:   NewRuntimeError("TestBind", "The function expects more arguments, 2 given", nil),
 		},
 		"too many arguments": {
 			param: &Cons{&Atom{"fst"}, &Cons{&Atom{"snd"}, Nil}},
-			args:  []Expr{&Number{1}, &Number{2}, &Number{3}},
+			args:  &Cons{&Number{1}, &Cons{&Number{2}, &Cons{&Number{3}, Nil}}},
 			err:   NewRuntimeError("TestBind", "The function expects fewer arguments, 3 given", nil),
 		},
 		"non-atom in parameter list": {
@@ -349,19 +338,15 @@ func TestBind(t *testing.T) {
 		},
 		"empty parameter list, args given": {
 			param: Nil,
-			args:  []Expr{&Number{1}, &Number{2}},
+			args:  &Cons{&Number{1}, &Cons{&Number{2}, Nil}},
 			err:   NewRuntimeError("TestBind", "The function expects fewer arguments, 2 given", nil),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			e := NewEvaluator("TestBind")
+			e := NewEvaluator("TestBind", nil)
 			err := e.bind(tc.param, tc.args)
 			if !runtimeErrorsEqual(err, tc.err) {
 				t.Errorf("Expected error %v, got %v", tc.err, err)
-			}
-
-			if len(tc.paramsList) != len(tc.expectedVals) {
-				t.Fatalf("Different length of the test case's paramsList (%d) and args (%d)", len(tc.paramsList), len(tc.args))
 			}
 
 			for i, param := range tc.paramsList {
@@ -378,27 +363,8 @@ func TestBind(t *testing.T) {
 	}
 }
 
-func TestSliceToCons(t *testing.T) {
-	for _, tc := range map[string]struct {
-		slice []Expr
-		cons  Expr
-	}{
-		"nil":            {[]Expr{}, Nil},
-		"single element": {[]Expr{&Atom{"a"}}, &Cons{&Atom{"a"}, Nil}},
-		"multiple elements": {
-			[]Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}},
-			&Cons{&Atom{"a"}, &Cons{&Atom{"b"}, &Cons{&Atom{"c"}, Nil}}},
-		},
-	} {
-		cons := sliceToCons(tc.slice)
-		if !cons.Equal(tc.cons) {
-			t.Errorf("sliceToCons of %v: expected %v, got %v", tc.slice, tc.cons, cons)
-		}
-	}
-}
-
 func TestConsEval(t *testing.T) {
-	e := NewEvaluator("TestConsEval")
+	e := NewEvaluator("TestConsEval", nil)
 
 	trueEval, err := e.Eval(True)
 	if err != nil {
@@ -424,14 +390,15 @@ func TestConsEval(t *testing.T) {
 	}
 
 	b := &Atom{"another"}
-	bEval, err := e.Eval(b)
+	_, err = e.Eval(b)
+	expectedErr := NewRuntimeError("TestConsEval", "Undefined name: 'another'", nil)
 	if err == nil {
-		t.Errorf("Expected an error when evaluating an undefined atom, received %v", bEval)
+		t.Errorf("Expected error %v when evaluating an undefined atom, got %v", expectedErr, err)
 	}
 }
 
 func TestNilEval(t *testing.T) {
-	e := NewEvaluator("TestNilEval")
+	e := NewEvaluator("TestNilEval", nil)
 	n := Nil
 
 	nEval, err := e.Eval(n)
@@ -445,7 +412,7 @@ func TestNilEval(t *testing.T) {
 }
 
 func TestNumberEval(t *testing.T) {
-	e := NewEvaluator("TestNumberEval")
+	e := NewEvaluator("TestNumberEval", nil)
 	a := &Number{123}
 
 	aEval, err := e.Eval(a)
