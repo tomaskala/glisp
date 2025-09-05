@@ -48,7 +48,7 @@ const (
 	// eof denotes that we have reached the end of the input.
 	eof = -1
 	// forbiddenInAtom is a list of runes forbidden from appearing in an atom.
-	forbiddenInAtom = "().'"
+	forbiddenInAtom = "().';"
 )
 
 type stateFn func(*Tokenizer) stateFn
@@ -100,6 +100,7 @@ func (t *Tokenizer) errorf(format string, args ...any) stateFn {
 	t.start = 0
 	t.pos = 0
 	t.atEOF = true
+	t.source = t.source[:0]
 	t.token = t.createToken(TokenErr, fmt.Sprintf(format, args...))
 	return nil
 }
@@ -129,7 +130,6 @@ func (t *Tokenizer) peek() rune {
 }
 
 func (t *Tokenizer) NextToken() Token {
-	t.token = t.createToken(TokenEOF, "EOF")
 	for state := readExpr; state != nil; state = state(t) {
 	}
 	return t.token
@@ -138,6 +138,7 @@ func (t *Tokenizer) NextToken() Token {
 func readExpr(t *Tokenizer) stateFn {
 	switch r := t.next(); {
 	case r == eof:
+		t.token = t.createToken(TokenEOF, "EOF")
 		return nil
 	case unicode.IsSpace(r):
 		return readSpace(t)
@@ -146,6 +147,12 @@ func readExpr(t *Tokenizer) stateFn {
 	case r == ')':
 		return t.emit(TokenRightParen)
 	case r == '.':
+		// This can be a floating point number with the leading zero missing.
+		next := t.peek()
+		if '0' <= next && next <= '9' {
+			t.backup() // Put the '.' back.
+			return readNumber(t)
+		}
 		return t.emit(TokenDot)
 	case r == '\'':
 		return t.emit(TokenQuote)
@@ -155,6 +162,7 @@ func readExpr(t *Tokenizer) stateFn {
 		// This can be either a number (peek() is a digit) or an atom.
 		next := t.peek()
 		if '0' <= next && next <= '9' {
+			t.backup() // Put the '+' or '-' back.
 			return readNumber(t)
 		}
 		return readAtom(t)
@@ -223,6 +231,10 @@ func readNumber(t *Tokenizer) stateFn {
 		t.accept("+-")
 		t.acceptRun("0123456789_")
 	}
+	next := t.peek()
+	if isAtom(next) {
+		return t.errorf("Atom cannot start with a number")
+	}
 	return t.emit(TokenNumber)
 }
 
@@ -242,5 +254,5 @@ func isAtomStart(r rune) bool {
 }
 
 func isAtom(r rune) bool {
-	return unicode.IsPrint(r) && !unicode.IsSpace(r) && !strings.ContainsRune(forbiddenInAtom, r)
+	return unicode.IsPrint(r) && !unicode.IsSpace(r) && r != unicode.ReplacementChar && !strings.ContainsRune(forbiddenInAtom, r)
 }

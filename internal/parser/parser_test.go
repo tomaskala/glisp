@@ -324,7 +324,7 @@ var errorTests = map[string]struct {
 	},
 	"invalid number": {
 		source:      "0xGHI",
-		expectedMsg: "Illegal number syntax",
+		expectedMsg: "Atom cannot start with a number",
 		expectedPos: tokenizer.Position{Line: 1, Column: 1},
 	},
 }
