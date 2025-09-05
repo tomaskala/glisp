@@ -1,6 +1,6 @@
-package glisp
+package tokenizer
 
-//go:generate stringer -output token_string.go -type tokenType
+//go:generate stringer -output token_string.go -type TokenType
 
 import (
 	"fmt"
@@ -9,37 +9,39 @@ import (
 	"unicode/utf8"
 )
 
-type token struct {
-	typ  tokenType // The type of this token.
-	pos  position  // The starting position of this token in the input string, in bytes.
-	line int       // The starting line of this token in the input string, 1-based.
-	val  string    // The raw value of this token.
+type Token struct {
+	Type TokenType // The type of this token.
+	Pos  Position  // The position of this token in the source text.
+	Val  string    // The raw value of this token.
 }
 
-func (t token) String() string {
-	switch t.typ {
-	case tokenEOF:
+func (t Token) String() string {
+	switch t.Type {
+	case TokenEOF:
 		return "<EOF>"
-	case tokenErr:
-		return t.val
+	case TokenErr:
+		return t.Val
 	default:
-		return fmt.Sprintf("<%s>", t.val)
+		return fmt.Sprintf("<%s>", t.Val)
 	}
 }
 
-type tokenType int
+type TokenType int
 
-type position int
+type Position struct {
+	Line   int // Line number of the token, 1-based.
+	Column int // Column number of the token on its line, 1-based.
+}
 
 const (
-	tokenEOF tokenType = iota
-	tokenErr
-	tokenLeftParen
-	tokenRightParen
-	tokenDot
-	tokenQuote
-	tokenNumber
-	tokenAtom
+	TokenEOF TokenType = iota
+	TokenErr
+	TokenLeftParen
+	TokenRightParen
+	TokenDot
+	TokenQuote
+	TokenNumber
+	TokenAtom
 )
 
 const (
@@ -49,22 +51,21 @@ const (
 	forbiddenInAtom = "().'"
 )
 
-type stateFn func(*tokenizer) stateFn
+type stateFn func(*Tokenizer) stateFn
 
-type tokenizer struct {
-	source string   // Source being tokenized.
-	start  position // Start position of the current token.
-	pos    position // Current position of the tokenizer.
-	line   int      // Current line of the tokenizer, 1-based.
-	atEOF  bool     // Whether we have reached the end of the file.
-	token  token    // Token returned out to the parser.
+type Tokenizer struct {
+	source string // Source being tokenized.
+	start  int    // Start position of the current token.
+	pos    int    // Current position of the tokenizer.
+	atEOF  bool   // Whether we have reached the end of the file.
+	token  Token  // Token returned out to the parser.
 }
 
-func newTokenizer(source string) *tokenizer {
-	return &tokenizer{source: source, line: 1}
+func NewTokenizer(source string) *Tokenizer {
+	return &Tokenizer{source: source}
 }
 
-func (t *tokenizer) accept(valid string) bool {
+func (t *Tokenizer) accept(valid string) bool {
 	if strings.ContainsRune(valid, t.next()) {
 		return true
 	}
@@ -72,82 +73,82 @@ func (t *tokenizer) accept(valid string) bool {
 	return false
 }
 
-func (t *tokenizer) acceptRun(valid string) {
+func (t *Tokenizer) acceptRun(valid string) {
 	for strings.ContainsRune(valid, t.next()) {
 	}
 	t.backup()
 }
 
-func (t *tokenizer) ignore() {
+func (t *Tokenizer) ignore() {
 	t.start = t.pos
 }
 
-func (t *tokenizer) emit(typ tokenType) stateFn {
-	t.token = token{typ, t.pos, t.line, t.source[t.start:t.pos]}
+func (t *Tokenizer) createToken(typ TokenType, val string) Token {
+	lastLineIdx := strings.LastIndex(t.source[:t.start], "\n")
+	line := strings.Count(t.source[:t.start], "\n") + 1
+	column := t.start - lastLineIdx
+	return Token{typ, Position{line, column}, val}
+}
+
+func (t *Tokenizer) emit(typ TokenType) stateFn {
+	t.token = t.createToken(typ, t.source[t.start:t.pos])
 	t.start = t.pos
 	return nil
 }
 
-func (t *tokenizer) errorf(format string, args ...any) stateFn {
+func (t *Tokenizer) errorf(format string, args ...any) stateFn {
 	t.start = 0
 	t.pos = 0
-	t.line = 1
 	t.atEOF = true
-	t.token = token{tokenErr, t.pos, t.line, fmt.Sprintf(format, args...)}
+	t.token = t.createToken(TokenErr, fmt.Sprintf(format, args...))
 	return nil
 }
 
-func (t *tokenizer) next() rune {
+func (t *Tokenizer) next() rune {
 	if int(t.pos) >= len(t.source) {
 		t.atEOF = true
 		return eof
 	}
 	r, w := utf8.DecodeRuneInString(t.source[t.pos:])
-	t.pos += position(w)
-	if r == '\n' {
-		t.line++
-	}
+	t.pos += w
 	return r
 }
 
-func (t *tokenizer) backup() {
+func (t *Tokenizer) backup() {
 	if t.atEOF || t.pos == 0 {
 		return
 	}
-	r, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
-	t.pos -= position(w)
-	if r == '\n' {
-		t.line--
-	}
+	_, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
+	t.pos -= w
 }
 
-func (t *tokenizer) peek() rune {
+func (t *Tokenizer) peek() rune {
 	r := t.next()
 	t.backup()
 	return r
 }
 
-func (t *tokenizer) nextToken() token {
-	t.token = token{tokenEOF, t.pos, t.line, "EOF"}
+func (t *Tokenizer) NextToken() Token {
+	t.token = t.createToken(TokenEOF, "EOF")
 	for state := readExpr; state != nil; state = state(t) {
 	}
 	return t.token
 }
 
-func readExpr(t *tokenizer) stateFn {
+func readExpr(t *Tokenizer) stateFn {
 	switch r := t.next(); {
 	case r == eof:
 		return nil
 	case unicode.IsSpace(r):
 		return readSpace(t)
 	case r == '(':
-		return t.emit(tokenLeftParen)
+		return t.emit(TokenLeftParen)
 	case r == ')':
-		return t.emit(tokenRightParen)
+		return t.emit(TokenRightParen)
 	case r == '.':
-		return t.emit(tokenDot)
+		return t.emit(TokenDot)
 	case r == '\'':
-		return t.emit(tokenQuote)
+		return t.emit(TokenQuote)
 	case r == ';':
 		return readComment(t)
 	case r == '+' || r == '-':
@@ -168,7 +169,7 @@ func readExpr(t *tokenizer) stateFn {
 	}
 }
 
-func readSpace(t *tokenizer) stateFn {
+func readSpace(t *Tokenizer) stateFn {
 	for {
 		r := t.next()
 		if !unicode.IsSpace(r) {
@@ -180,10 +181,10 @@ func readSpace(t *tokenizer) stateFn {
 	return readExpr(t)
 }
 
-func readComment(t *tokenizer) stateFn {
+func readComment(t *Tokenizer) stateFn {
 	for {
 		r := t.next()
-		if r == '\n' || r == 0 {
+		if r == '\n' || r == eof {
 			break
 		}
 	}
@@ -191,7 +192,7 @@ func readComment(t *tokenizer) stateFn {
 	return readExpr(t)
 }
 
-func readNumber(t *tokenizer) stateFn {
+func readNumber(t *Tokenizer) stateFn {
 	t.accept("+-")
 	// Decimal number by default.
 	digits := "0123456789_"
@@ -222,10 +223,10 @@ func readNumber(t *tokenizer) stateFn {
 		t.accept("+-")
 		t.acceptRun("0123456789_")
 	}
-	return t.emit(tokenNumber)
+	return t.emit(TokenNumber)
 }
 
-func readAtom(t *tokenizer) stateFn {
+func readAtom(t *Tokenizer) stateFn {
 	for {
 		r := t.next()
 		if !isAtom(r) {
@@ -233,7 +234,7 @@ func readAtom(t *tokenizer) stateFn {
 			break
 		}
 	}
-	return t.emit(tokenAtom)
+	return t.emit(TokenAtom)
 }
 
 func isAtomStart(r rune) bool {
