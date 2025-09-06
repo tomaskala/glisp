@@ -1,13 +1,10 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-
-	"tomaskala.com/glisp/internal/glisp"
 
 	"github.com/chzyer/readline"
 )
@@ -20,35 +17,8 @@ const (
 	exitGeneralError = 4
 )
 
-func eval(evaluator *glisp.Evaluator, parser *glisp.Parser) (glisp.Expr, error) {
-	var result glisp.Expr
-	for {
-		expr, err := parser.NextExpr()
-		if err != nil {
-			// We will eventually hit this case because the parser will return an EOF error.
-			return result, err
-		}
-		result, err = evaluator.Eval(expr)
-		if err != nil {
-			return result, err
-		}
-	}
-}
-
-func makeCompletionHints(builtins map[string]glisp.Expr) []readline.PrefixCompleterInterface {
-	var hints []readline.PrefixCompleterInterface
-	for name := range builtins {
-		// Store a hint both for "<builtin>" and for "(<builtin>", so that they can easily
-		// be referenced when storing them as well as when calling them.
-		hints = append(hints, readline.PcItem(name))
-		hints = append(hints, readline.PcItem(fmt.Sprintf("(%s", name)))
-	}
-	return hints
-}
-
 func runRepl() int {
-	builtins := glisp.LoadBuiltins()
-	completer := readline.NewPrefixCompleter(makeCompletionHints(builtins)...)
+	completer := readline.NewPrefixCompleter()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       "λ ",
 		AutoComplete: completer,
@@ -58,7 +28,6 @@ func runRepl() int {
 		return exitIoError
 	}
 	defer rl.Close()
-	evaluator := glisp.NewEvaluator("REPL", builtins)
 	for {
 		line, err := rl.Readline()
 		if err == readline.ErrInterrupt {
@@ -72,39 +41,19 @@ func runRepl() int {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return exitIoError
 		}
-		parser := glisp.NewParser("REPL", line)
-		expr, err := eval(evaluator, parser)
-		if errors.Is(err, io.EOF) {
-			fmt.Println(expr)
-		} else {
-			fmt.Printf("%v\n", err)
-		}
+		// TODO: Parse & evaluate the line & print the result.
 	}
 	return exitSuccess
 }
 
 func runScript(path string) int {
-	source, err := os.ReadFile(path)
+	_, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
 		return exitIoError
 	}
-	builtins := glisp.LoadBuiltins()
-	evaluator := glisp.NewEvaluator(path, builtins)
-	parser := glisp.NewParser(path, string(source))
-	_, err = eval(evaluator, parser)
-	if errors.Is(err, io.EOF) {
-		return exitSuccess
-	}
-	fmt.Fprintf(os.Stderr, "%v\n", err)
-	switch err.(type) {
-	case glisp.ParseError:
-		return exitParseError
-	case glisp.RuntimeError:
-		return exitRuntimeError
-	default:
-		return exitGeneralError
-	}
+	// TODO: Parse & Evaluate the source & print the errors if any.
+	return exitSuccess
 }
 
 func main() {
