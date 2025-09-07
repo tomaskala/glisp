@@ -70,6 +70,7 @@ func (p *Parser) parseProgram() *Program {
 		prog.Exprs = append(prog.Exprs, expr)
 		p.next()
 	}
+	prog.token = p.tok
 	return prog
 }
 
@@ -77,17 +78,17 @@ func (p *Parser) parseProgram() *Program {
 //
 // call | quote | number | atom
 func (p *Parser) parseExpr() Expr {
-	switch p.tok.Type {
+	switch tok := p.tok; tok.Type {
 	case tokenizer.TokenLeftParen:
 		p.next()
 		return p.parseCall()
 	case tokenizer.TokenQuote:
 		p.next()
-		return p.parseQuote()
+		return p.parseQuote(tok)
 	case tokenizer.TokenNumber:
-		return p.parseNumber()
+		return p.parseNumber(tok)
 	case tokenizer.TokenAtom:
-		return &Atom{p.tok.Val}
+		return &Atom{tok.Val, tok}
 	default:
 		panic(p.errorf("Unexpected token: expected expression, got %v", p.tok.Type))
 	}
@@ -101,29 +102,26 @@ func (p *Parser) parseExpr() Expr {
 //
 // Special forms are built in to the language and their parameters differ.
 func (p *Parser) parseCall() Expr {
-	switch p.tok.Val {
+	switch tok := p.tok; tok.Val {
 	case ")":
 		return &Nil{}
 	case "quote":
 		p.next()
-		return p.parseLongQuote()
+		return p.parseLongQuote(tok)
 	case "define":
 		p.next()
-		return p.parseDefine()
+		return p.parseDefine(tok)
 	case "let":
 		p.next()
-		return p.parseLet()
+		return p.parseLet(tok)
 	case "lambda":
 		p.next()
-		return p.parseLambda()
+		return p.parseLambda(tok)
 	default:
 		callee := p.parseExpr()
 		p.next()
 		args := p.parseList()
-		if name, ok := callee.(*Atom); ok {
-			return &NamedCall{name.Name, args}
-		}
-		return &Call{callee, args}
+		return &Call{callee, args, tok}
 	}
 }
 
@@ -135,10 +133,10 @@ func (p *Parser) parseCall() Expr {
 // quote is past
 //
 // Parses the long form (quote expr), as opposed to the shorthand 'expr.
-func (p *Parser) parseLongQuote() Expr {
+func (p *Parser) parseLongQuote(tok tokenizer.Token) Expr {
 	quotedExpr := p.parseExpr()
 	p.consume(tokenizer.TokenRightParen)
-	return &Quote{quotedExpr}
+	return &Quote{quotedExpr, tok}
 }
 
 // Define:
@@ -147,14 +145,14 @@ func (p *Parser) parseLongQuote() Expr {
 //
 // "(" is past
 // define is past
-func (p *Parser) parseDefine() Expr {
+func (p *Parser) parseDefine(tok tokenizer.Token) Expr {
 	p.expect(tokenizer.TokenAtom)
 	name := p.tok.Val
 	p.defineName = name
 	p.next()
 	value := p.parseExpr()
 	p.consume(tokenizer.TokenRightParen)
-	return &Define{name, value}
+	return &Define{name, value, tok}
 }
 
 // Let:
@@ -163,7 +161,7 @@ func (p *Parser) parseDefine() Expr {
 //
 // "(" is past
 // let is past
-func (p *Parser) parseLet() Expr {
+func (p *Parser) parseLet(tok tokenizer.Token) Expr {
 	var bindings []Binding
 	p.expect(tokenizer.TokenLeftParen)
 	p.next()
@@ -180,7 +178,7 @@ func (p *Parser) parseLet() Expr {
 	p.next()
 	body := p.parseExpr()
 	p.consume(tokenizer.TokenRightParen)
-	return &Let{bindings, body}
+	return &Let{bindings, body, tok}
 }
 
 // Lambda:
@@ -189,7 +187,7 @@ func (p *Parser) parseLet() Expr {
 //
 // "(" is past
 // lambda is past
-func (p *Parser) parseLambda() Expr {
+func (p *Parser) parseLambda(tok tokenizer.Token) Expr {
 	var params []string
 	var dotParam string
 	switch p.tok.Type {
@@ -204,7 +202,7 @@ func (p *Parser) parseLambda() Expr {
 	p.next()
 	body := p.parseExpr()
 	p.consume(tokenizer.TokenRightParen)
-	return &Function{p.defineName, params, dotParam, body}
+	return &Function{p.defineName, params, dotParam, body, tok}
 }
 
 // List:
@@ -255,9 +253,9 @@ func (p *Parser) parseStringList() ([]string, string) {
 // "'" expr
 //
 // "'" is past
-func (p *Parser) parseQuote() Expr {
+func (p *Parser) parseQuote(tok tokenizer.Token) Expr {
 	expr := p.parseExpr()
-	return &Quote{expr}
+	return &Quote{expr, tok}
 }
 
 // Number:
@@ -265,7 +263,7 @@ func (p *Parser) parseQuote() Expr {
 // number literal
 //
 // Logic taken from https://cs.opensource.google/go/go/+/master:src/text/template/parse/node.go.
-func (p *Parser) parseNumber() Expr {
+func (p *Parser) parseNumber(tok tokenizer.Token) Expr {
 	isUint := false
 	isInt := false
 	isFloat := false
@@ -315,13 +313,13 @@ func (p *Parser) parseNumber() Expr {
 		}
 	}
 	if isInt {
-		return &Number{float64(intVal)}
+		return &Number{float64(intVal), tok}
 	}
 	if isUint {
-		return &Number{float64(uintVal)}
+		return &Number{float64(uintVal), tok}
 	}
 	if isFloat {
-		return &Number{floatVal}
+		return &Number{floatVal, tok}
 	}
 	panic(p.errorf("Illegal number syntax"))
 }

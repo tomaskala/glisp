@@ -36,184 +36,216 @@ func stringSlicesEqual(expected, actual []string) bool {
 	return true
 }
 
+func makeNil() *Nil {
+	return &Nil{tokenizer.Token{}}
+}
+
+func makeAtom(name string) *Atom {
+	return &Atom{name, tokenizer.Token{}}
+}
+
+func makeNumber(value float64) *Number {
+	return &Number{value, tokenizer.Token{}}
+}
+
+func makeQuote(value Expr) *Quote {
+	return &Quote{value, tokenizer.Token{}}
+}
+
+func makeCall(function Expr, args []Expr) *Call {
+	return &Call{function, args, tokenizer.Token{}}
+}
+
+func makeFunction(name string, params []string, restParam string, body Expr) *Function {
+	return &Function{name, params, restParam, body, tokenizer.Token{}}
+}
+
+func makeDefine(name string, value Expr) *Define {
+	return &Define{name, value, tokenizer.Token{}}
+}
+
+func makeLet(bindings []Binding, body Expr) *Let {
+	return &Let{bindings, body, tokenizer.Token{}}
+}
+
 var atomTests = map[string]parserTest{
-	"simple atom":    {source: "map", expr: &Atom{"map"}},
-	"atom with dash": {source: "list-ref", expr: &Atom{"list-ref"}},
-	"atom plus":      {source: "+", expr: &Atom{"+"}},
-	"atom minus":     {source: "-", expr: &Atom{"-"}},
-	"atom multiply":  {source: "*", expr: &Atom{"*"}},
-	"atom divide":    {source: "/", expr: &Atom{"/"}},
-	"atom question":  {source: "null?", expr: &Atom{"null?"}},
-	"atom with nums": {source: "val2num", expr: &Atom{"val2num"}},
-	"atom special":   {source: "odd@val-lisp", expr: &Atom{"odd@val-lisp"}},
-	"atom long":      {source: "very-long-atom@with%some+signs", expr: &Atom{"very-long-atom@with%some+signs"}},
-	"atom operator":  {source: "<*>", expr: &Atom{"<*>"}},
-	"atom boolean":   {source: "#t", expr: &Atom{"#t"}},
+	"simple atom":    {source: "map", expr: makeAtom("map")},
+	"atom with dash": {source: "list-ref", expr: makeAtom("list-ref")},
+	"atom plus":      {source: "+", expr: makeAtom("+")},
+	"atom minus":     {source: "-", expr: makeAtom("-")},
+	"atom multiply":  {source: "*", expr: makeAtom("*")},
+	"atom divide":    {source: "/", expr: makeAtom("/")},
+	"atom question":  {source: "null?", expr: makeAtom("null?")},
+	"atom with nums": {source: "val2num", expr: makeAtom("val2num")},
+	"atom special":   {source: "odd@val-lisp", expr: makeAtom("odd@val-lisp")},
+	"atom long":      {source: "very-long-atom@with%some+signs", expr: makeAtom("very-long-atom@with%some+signs")},
+	"atom operator":  {source: "<*>", expr: makeAtom("<*>")},
+	"atom boolean":   {source: "#t", expr: makeAtom("#t")},
 	// Edge cases for atoms
-	"atom underscore":    {source: "_", expr: &Atom{"_"}},
-	"atom with numbers":  {source: "var123", expr: &Atom{"var123"}},
-	"atom with unicode":  {source: "λ", expr: &Atom{"λ"}},
-	"atom mixed unicode": {source: "test-λ-func", expr: &Atom{"test-λ-func"}},
-	"atom exclamation":   {source: "not!", expr: &Atom{"not!"}},
-	"atom colon":         {source: "keyword:", expr: &Atom{"keyword:"}},
-	"atom pipe":          {source: "|special|", expr: &Atom{"|special|"}},
-	"atom backslash":     {source: "\\", expr: &Atom{"\\"}},
-	"atom caret":         {source: "^", expr: &Atom{"^"}},
-	"atom tilde":         {source: "~", expr: &Atom{"~"}},
-	"atom ampersand":     {source: "&", expr: &Atom{"&"}},
+	"atom underscore":    {source: "_", expr: makeAtom("_")},
+	"atom with numbers":  {source: "var123", expr: makeAtom("var123")},
+	"atom with unicode":  {source: "λ", expr: makeAtom("λ")},
+	"atom mixed unicode": {source: "test-λ-func", expr: makeAtom("test-λ-func")},
+	"atom exclamation":   {source: "not!", expr: makeAtom("not!")},
+	"atom colon":         {source: "keyword:", expr: makeAtom("keyword:")},
+	"atom pipe":          {source: "|special|", expr: makeAtom("|special|")},
+	"atom backslash":     {source: "\\", expr: makeAtom("\\")},
+	"atom caret":         {source: "^", expr: makeAtom("^")},
+	"atom tilde":         {source: "~", expr: makeAtom("~")},
+	"atom ampersand":     {source: "&", expr: makeAtom("&")},
 }
 
 var numberTests = map[string]parserTest{
-	"integer":         {source: "42", expr: &Number{42}},
-	"negative int":    {source: "-17", expr: &Number{-17}},
-	"positive int":    {source: "+123", expr: &Number{123}},
-	"zero":            {source: "0", expr: &Number{0}},
-	"float":           {source: "3.14159", expr: &Number{3.14159}},
-	"negative float":  {source: "-2.718", expr: &Number{-2.718}},
-	"positive float":  {source: "+1.414", expr: &Number{1.414}},
-	"hex":             {source: "0xFF", expr: &Number{255}},
-	"hex negative":    {source: "-0xABC", expr: &Number{-2748}},
-	"octal":           {source: "0o755", expr: &Number{493}},
-	"octal negative":  {source: "-0o644", expr: &Number{-420}},
-	"binary":          {source: "0b1101", expr: &Number{13}},
-	"binary negative": {source: "-0b1010", expr: &Number{-10}},
-	"scientific":      {source: "1.5e3", expr: &Number{1500}},
-	"scientific neg":  {source: "-2.5E-2", expr: &Number{-0.025}},
-	"hex float":       {source: "0x1.8p3", expr: &Number{12}},
+	"integer":         {source: "42", expr: makeNumber(42)},
+	"negative int":    {source: "-17", expr: makeNumber(-17)},
+	"positive int":    {source: "+123", expr: makeNumber(123)},
+	"zero":            {source: "0", expr: makeNumber(0)},
+	"float":           {source: "3.14159", expr: makeNumber(3.14159)},
+	"negative float":  {source: "-2.718", expr: makeNumber(-2.718)},
+	"positive float":  {source: "+1.414", expr: makeNumber(1.414)},
+	"hex":             {source: "0xFF", expr: makeNumber(255)},
+	"hex negative":    {source: "-0xABC", expr: makeNumber(-2748)},
+	"octal":           {source: "0o755", expr: makeNumber(493)},
+	"octal negative":  {source: "-0o644", expr: makeNumber(-420)},
+	"binary":          {source: "0b1101", expr: makeNumber(13)},
+	"binary negative": {source: "-0b1010", expr: makeNumber(-10)},
+	"scientific":      {source: "1.5e3", expr: makeNumber(1500)},
+	"scientific neg":  {source: "-2.5E-2", expr: makeNumber(-0.025)},
+	"hex float":       {source: "0x1.8p3", expr: makeNumber(12)},
 	// Edge cases for numbers
-	"hex lowercase":            {source: "0xabc", expr: &Number{2748}},
-	"hex uppercase":            {source: "0XDEF", expr: &Number{3567}},
-	"octal lowercase":          {source: "0o123", expr: &Number{83}},
-	"octal uppercase":          {source: "0O456", expr: &Number{302}},
-	"binary lowercase":         {source: "0b101", expr: &Number{5}},
-	"binary uppercase":         {source: "0B110", expr: &Number{6}},
-	"zero float":               {source: "0.0", expr: &Number{0.0}},
-	"negative zero":            {source: "-0", expr: &Number{0}},
-	"positive zero":            {source: "+0", expr: &Number{0}},
-	"scientific uppercase":     {source: "1E10", expr: &Number{1e10}},
-	"hex scientific":           {source: "0x1P4", expr: &Number{16}},
-	"hex float negative":       {source: "-0x1.5p-1", expr: &Number{-0.65625}},
-	"large integer":            {source: "9223372036854775807", expr: &Number{9.223372036854776e+18}},
-	"very small float":         {source: "1e-100", expr: &Number{1e-100}},
-	"numbers with underscores": {source: "1_000_000", expr: &Number{1000000}},
-	"hex with underscores":     {source: "0xFF_FF", expr: &Number{65535}},
-	"float with underscores":   {source: "3.141_592", expr: &Number{3.141592}},
+	"hex lowercase":            {source: "0xabc", expr: makeNumber(2748)},
+	"hex uppercase":            {source: "0XDEF", expr: makeNumber(3567)},
+	"octal lowercase":          {source: "0o123", expr: makeNumber(83)},
+	"octal uppercase":          {source: "0O456", expr: makeNumber(302)},
+	"binary lowercase":         {source: "0b101", expr: makeNumber(5)},
+	"binary uppercase":         {source: "0B110", expr: makeNumber(6)},
+	"zero float":               {source: "0.0", expr: makeNumber(0.0)},
+	"negative zero":            {source: "-0", expr: makeNumber(0)},
+	"positive zero":            {source: "+0", expr: makeNumber(0)},
+	"scientific uppercase":     {source: "1E10", expr: makeNumber(1e10)},
+	"hex scientific":           {source: "0x1P4", expr: makeNumber(16)},
+	"hex float negative":       {source: "-0x1.5p-1", expr: makeNumber(-0.65625)},
+	"large integer":            {source: "9223372036854775807", expr: makeNumber(9.223372036854776e+18)},
+	"very small float":         {source: "1e-100", expr: makeNumber(1e-100)},
+	"numbers with underscores": {source: "1_000_000", expr: makeNumber(1000000)},
+	"hex with underscores":     {source: "0xFF_FF", expr: makeNumber(65535)},
+	"float with underscores":   {source: "3.141_592", expr: makeNumber(3.141592)},
 }
 
 var nilTests = map[string]parserTest{
-	"empty list": {source: "()", expr: &Nil{}},
+	"empty list": {source: "()", expr: makeNil()},
 }
 
 var quoteTests = map[string]parserTest{
-	"quote atom":      {source: "'x", expr: &Quote{&Atom{"x"}}},
-	"quote number":    {source: "'42", expr: &Quote{&Number{42}}},
-	"quote nil":       {source: "'()", expr: &Quote{&Nil{}}},
-	"quote list":      {source: "'(a b c)", expr: &Quote{&NamedCall{"a", []Expr{&Atom{"b"}, &Atom{"c"}}}}},
-	"long quote atom": {source: "(quote x)", expr: &Quote{&Atom{"x"}}},
-	"long quote list": {source: "(quote (a b))", expr: &Quote{&NamedCall{"a", []Expr{&Atom{"b"}}}}},
+	"quote atom":      {source: "'x", expr: makeQuote(makeAtom("x"))},
+	"quote number":    {source: "'42", expr: makeQuote(makeNumber(42))},
+	"quote nil":       {source: "'()", expr: makeQuote(makeNil())},
+	"quote list":      {source: "'(a b c)", expr: makeQuote(makeCall(makeAtom("a"), []Expr{makeAtom("b"), makeAtom("c")}))},
+	"long quote atom": {source: "(quote x)", expr: makeQuote(makeAtom("x"))},
+	"long quote list": {source: "(quote (a b))", expr: makeQuote(makeCall(makeAtom("a"), []Expr{makeAtom("b")}))},
 	// Edge cases for quotes
-	"nested quotes":      {source: "''x", expr: &Quote{&Quote{&Atom{"x"}}}},
-	"quote complex expr": {source: "'(+ 1 (* 2 3))", expr: &Quote{&NamedCall{"+", []Expr{&Number{1}, &NamedCall{"*", []Expr{&Number{2}, &Number{3}}}}}}},
-	"quote lambda":       {source: "'(lambda (x) x)", expr: &Quote{&Function{"", []string{"x"}, "", &Atom{"x"}}}},
-	"long quote nested":  {source: "(quote (quote x))", expr: &Quote{&Quote{&Atom{"x"}}}},
+	"nested quotes":      {source: "''x", expr: makeQuote(makeQuote(makeAtom("x")))},
+	"quote complex expr": {source: "'(+ 1 (* 2 3))", expr: makeQuote(makeCall(makeAtom("+"), []Expr{makeNumber(1), makeCall(makeAtom("*"), []Expr{makeNumber(2), makeNumber(3)})}))},
+	"quote lambda":       {source: "'(lambda (x) x)", expr: makeQuote(makeFunction("", []string{"x"}, "", makeAtom("x")))},
+	"long quote nested":  {source: "(quote (quote x))", expr: makeQuote(makeQuote(makeAtom("x")))},
 }
 
 var callTests = map[string]parserTest{
-	"lambda call":         {source: "((lambda (x) x) 42)", expr: &Call{&Function{"", []string{"x"}, "", &Atom{"x"}}, []Expr{&Number{42}}}},
-	"nested lambda call":  {source: "((lambda (f x) (f x)) + 5)", expr: &Call{&Function{"", []string{"f", "x"}, "", &NamedCall{"f", []Expr{&Atom{"x"}}}}, []Expr{&Atom{"+"}, &Number{5}}}},
-	"quoted lambda call":  {source: "('(lambda (x) x) 'test)", expr: &Call{&Quote{&Function{"", []string{"x"}, "", &Atom{"x"}}}, []Expr{&Quote{&Atom{"test"}}}}},
-	"let expression call": {source: "((let ((x 5)) (lambda (y) (+ x y))) 3)", expr: &Call{&Let{[]Binding{{"x", &Number{5}}}, &Function{"", []string{"y"}, "", &NamedCall{"+", []Expr{&Atom{"x"}, &Atom{"y"}}}}}, []Expr{&Number{3}}}},
-	"call with no args":   {source: "((lambda () 42))", expr: &Call{&Function{"", []string{}, "", &Number{42}}, []Expr{}}},
-	"call with many args": {source: "((lambda (a b c d) (+ a b c d)) 1 2 3 4)", expr: &Call{&Function{"", []string{"a", "b", "c", "d"}, "", &NamedCall{"+", []Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}, &Atom{"d"}}}}, []Expr{&Number{1}, &Number{2}, &Number{3}, &Number{4}}}},
-	"nested call":         {source: "(((lambda (x) (lambda (y) (+ x y))) 5) 3)", expr: &Call{&Call{&Function{"", []string{"x"}, "", &Function{"", []string{"y"}, "", &NamedCall{"+", []Expr{&Atom{"x"}, &Atom{"y"}}}}}, []Expr{&Number{5}}}, []Expr{&Number{3}}}},
+	"lambda call":         {source: "((lambda (x) x) 42)", expr: makeCall(makeFunction("", []string{"x"}, "", makeAtom("x")), []Expr{makeNumber(42)})},
+	"nested lambda call":  {source: "((lambda (f x) (f x)) + 5)", expr: makeCall(makeFunction("", []string{"f", "x"}, "", makeCall(makeAtom("f"), []Expr{makeAtom("x")})), []Expr{makeAtom("+"), makeNumber(5)})},
+	"quoted lambda call":  {source: "('(lambda (x) x) 'test)", expr: makeCall(makeQuote(makeFunction("", []string{"x"}, "", makeAtom("x"))), []Expr{makeQuote(makeAtom("test"))})},
+	"let expression call": {source: "((let ((x 5)) (lambda (y) (+ x y))) 3)", expr: makeCall(makeLet([]Binding{{"x", makeNumber(5)}}, makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeAtom("y")}))), []Expr{makeNumber(3)})},
+	"call with no args":   {source: "((lambda () 42))", expr: makeCall(makeFunction("", []string{}, "", makeNumber(42)), []Expr{})},
+	"call with many args": {source: "((lambda (a b c d) (+ a b c d)) 1 2 3 4)", expr: makeCall(makeFunction("", []string{"a", "b", "c", "d"}, "", makeCall(makeAtom("+"), []Expr{makeAtom("a"), makeAtom("b"), makeAtom("c"), makeAtom("d")})), []Expr{makeNumber(1), makeNumber(2), makeNumber(3), makeNumber(4)})},
+	"nested call":         {source: "(((lambda (x) (lambda (y) (+ x y))) 5) 3)", expr: makeCall(makeCall(makeFunction("", []string{"x"}, "", makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeAtom("y")}))), []Expr{makeNumber(5)}), []Expr{makeNumber(3)})},
 }
 
 var namedCallTests = map[string]parserTest{
-	"simple call":     {source: "(+ 1 2)", expr: &NamedCall{"+", []Expr{&Number{1}, &Number{2}}}},
-	"nested call":     {source: "(+ (* 2 3) 4)", expr: &NamedCall{"+", []Expr{&NamedCall{"*", []Expr{&Number{2}, &Number{3}}}, &Number{4}}}},
-	"no args":         {source: "(list)", expr: &NamedCall{"list", []Expr{}}},
-	"one arg":         {source: "(car lst)", expr: &NamedCall{"car", []Expr{&Atom{"lst"}}}},
-	"many args":       {source: "(+ 1 2 3 4 5)", expr: &NamedCall{"+", []Expr{&Number{1}, &Number{2}, &Number{3}, &Number{4}, &Number{5}}}},
-	"call with quote": {source: "(cons 'a '())", expr: &NamedCall{"cons", []Expr{&Quote{&Atom{"a"}}, &Quote{&Nil{}}}}},
+	"simple call":     {source: "(+ 1 2)", expr: makeCall(makeAtom("+"), []Expr{makeNumber(1), makeNumber(2)})},
+	"nested call":     {source: "(+ (* 2 3) 4)", expr: makeCall(makeAtom("+"), []Expr{makeCall(makeAtom("*"), []Expr{makeNumber(2), makeNumber(3)}), makeNumber(4)})},
+	"no args":         {source: "(list)", expr: makeCall(makeAtom("list"), []Expr{})},
+	"one arg":         {source: "(car lst)", expr: makeCall(makeAtom("car"), []Expr{makeAtom("lst")})},
+	"many args":       {source: "(+ 1 2 3 4 5)", expr: makeCall(makeAtom("+"), []Expr{makeNumber(1), makeNumber(2), makeNumber(3), makeNumber(4), makeNumber(5)})},
+	"call with quote": {source: "(cons 'a '())", expr: makeCall(makeAtom("cons"), []Expr{makeQuote(makeAtom("a")), makeQuote(makeNil())})},
 	// Edge cases for named calls
-	"deeply nested":      {source: "(f (g (h (i j))))", expr: &NamedCall{"f", []Expr{&NamedCall{"g", []Expr{&NamedCall{"h", []Expr{&NamedCall{"i", []Expr{&Atom{"j"}}}}}}}}}},
-	"mixed expressions":  {source: "(f 'a 42 (g x) '())", expr: &NamedCall{"f", []Expr{&Quote{&Atom{"a"}}, &Number{42}, &NamedCall{"g", []Expr{&Atom{"x"}}}, &Quote{&Nil{}}}}},
-	"special characters": {source: "(+ -1 +2)", expr: &NamedCall{"+", []Expr{&Number{-1}, &Number{2}}}},
+	"deeply nested":      {source: "(f (g (h (i j))))", expr: makeCall(makeAtom("f"), []Expr{makeCall(makeAtom("g"), []Expr{makeCall(makeAtom("h"), []Expr{makeCall(makeAtom("i"), []Expr{makeAtom("j")})})})})},
+	"mixed expressions":  {source: "(f 'a 42 (g x) '())", expr: makeCall(makeAtom("f"), []Expr{makeQuote(makeAtom("a")), makeNumber(42), makeCall(makeAtom("g"), []Expr{makeAtom("x")}), makeQuote(makeNil())})},
+	"special characters": {source: "(+ -1 +2)", expr: makeCall(makeAtom("+"), []Expr{makeNumber(-1), makeNumber(2)})},
 }
 
 var defineTests = map[string]parserTest{
-	"define var": {source: "(define x 42)", expr: &Define{"x", &Number{42}}},
+	"define var": {source: "(define x 42)", expr: makeDefine("x", makeNumber(42))},
 	"define func": {source: "(define factorial (lambda (n) (if (= n 0) 1 (* n (factorial (- n 1))))))",
-		expr: &Define{"factorial", &Function{"factorial", []string{"n"}, "",
-			&NamedCall{"if", []Expr{
-				&NamedCall{"=", []Expr{&Atom{"n"}, &Number{0}}},
-				&Number{1},
-				&NamedCall{"*", []Expr{
-					&Atom{"n"},
-					&NamedCall{"factorial", []Expr{&NamedCall{"-", []Expr{&Atom{"n"}, &Number{1}}}}},
-				}},
-			}}}}},
-	"define atom": {source: "(define nil '())", expr: &Define{"nil", &Quote{&Nil{}}}},
+		expr: makeDefine("factorial", makeFunction("factorial", []string{"n"}, "",
+			makeCall(makeAtom("if"), []Expr{
+				makeCall(makeAtom("="), []Expr{makeAtom("n"), makeNumber(0)}),
+				makeNumber(1),
+				makeCall(makeAtom("*"), []Expr{
+					makeAtom("n"),
+					makeCall(makeAtom("factorial"), []Expr{makeCall(makeAtom("-"), []Expr{makeAtom("n"), makeNumber(1)})}),
+				}),
+			})))},
+	"define atom": {source: "(define nil '())", expr: makeDefine("nil", makeQuote(makeNil()))},
 	// Edge cases for define
-	"define lambda no name": {source: "(define f (lambda (x) x))", expr: &Define{"f", &Function{"f", []string{"x"}, "", &Atom{"x"}}}},
-	"define complex expr":   {source: "(define result (+ (* 2 3) 4))", expr: &Define{"result", &NamedCall{"+", []Expr{&NamedCall{"*", []Expr{&Number{2}, &Number{3}}}, &Number{4}}}}},
+	"define lambda no name": {source: "(define f (lambda (x) x))", expr: makeDefine("f", makeFunction("f", []string{"x"}, "", makeAtom("x")))},
+	"define complex expr":   {source: "(define result (+ (* 2 3) 4))", expr: makeDefine("result", makeCall(makeAtom("+"), []Expr{makeCall(makeAtom("*"), []Expr{makeNumber(2), makeNumber(3)}), makeNumber(4)}))},
 }
 
 var lambdaTests = map[string]parserTest{
-	"simple lambda":     {source: "(lambda (x) x)", expr: &Function{"", []string{"x"}, "", &Atom{"x"}}},
-	"lambda no args":    {source: "(lambda () 42)", expr: &Function{"", []string{}, "", &Number{42}}},
-	"lambda multi args": {source: "(lambda (x y z) (+ x y z))", expr: &Function{"", []string{"x", "y", "z"}, "", &NamedCall{"+", []Expr{&Atom{"x"}, &Atom{"y"}, &Atom{"z"}}}}},
-	"lambda rest param": {source: "(lambda (x . xs) (cons x xs))", expr: &Function{"", []string{"x"}, "xs", &NamedCall{"cons", []Expr{&Atom{"x"}, &Atom{"xs"}}}}},
-	"lambda only rest":  {source: "(lambda xs xs)", expr: &Function{"", []string{}, "xs", &Atom{"xs"}}},
+	"simple lambda":     {source: "(lambda (x) x)", expr: makeFunction("", []string{"x"}, "", makeAtom("x"))},
+	"lambda no args":    {source: "(lambda () 42)", expr: makeFunction("", []string{}, "", makeNumber(42))},
+	"lambda multi args": {source: "(lambda (x y z) (+ x y z))", expr: makeFunction("", []string{"x", "y", "z"}, "", makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeAtom("y"), makeAtom("z")}))},
+	"lambda rest param": {source: "(lambda (x . xs) (cons x xs))", expr: makeFunction("", []string{"x"}, "xs", makeCall(makeAtom("cons"), []Expr{makeAtom("x"), makeAtom("xs")}))},
+	"lambda only rest":  {source: "(lambda xs xs)", expr: makeFunction("", []string{}, "xs", makeAtom("xs"))},
 	// Edge cases for lambda
-	"lambda complex body":     {source: "(lambda (x) (if (> x 0) x (- x)))", expr: &Function{"", []string{"x"}, "", &NamedCall{"if", []Expr{&NamedCall{">", []Expr{&Atom{"x"}, &Number{0}}}, &Atom{"x"}, &NamedCall{"-", []Expr{&Atom{"x"}}}}}}},
-	"lambda nested":           {source: "(lambda (f) (lambda (x) (f x)))", expr: &Function{"", []string{"f"}, "", &Function{"", []string{"x"}, "", &NamedCall{"f", []Expr{&Atom{"x"}}}}}},
-	"lambda with many params": {source: "(lambda (a b c d e f g) (+ a b c d e f g))", expr: &Function{"", []string{"a", "b", "c", "d", "e", "f", "g"}, "", &NamedCall{"+", []Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}, &Atom{"d"}, &Atom{"e"}, &Atom{"f"}, &Atom{"g"}}}}},
-	"lambda multiple rest":    {source: "(lambda (x y . rest) rest)", expr: &Function{"", []string{"x", "y"}, "rest", &Atom{"rest"}}},
+	"lambda complex body":     {source: "(lambda (x) (if (> x 0) x (- x)))", expr: makeFunction("", []string{"x"}, "", makeCall(makeAtom("if"), []Expr{makeCall(makeAtom(">"), []Expr{makeAtom("x"), makeNumber(0)}), makeAtom("x"), makeCall(makeAtom("-"), []Expr{makeAtom("x")})}))},
+	"lambda nested":           {source: "(lambda (f) (lambda (x) (f x)))", expr: makeFunction("", []string{"f"}, "", makeFunction("", []string{"x"}, "", makeCall(makeAtom("f"), []Expr{makeAtom("x")})))},
+	"lambda with many params": {source: "(lambda (a b c d e f g) (+ a b c d e f g))", expr: makeFunction("", []string{"a", "b", "c", "d", "e", "f", "g"}, "", makeCall(makeAtom("+"), []Expr{makeAtom("a"), makeAtom("b"), makeAtom("c"), makeAtom("d"), makeAtom("e"), makeAtom("f"), makeAtom("g")}))},
+	"lambda multiple rest":    {source: "(lambda (x y . rest) rest)", expr: makeFunction("", []string{"x", "y"}, "rest", makeAtom("rest"))},
 }
 
 var letTests = map[string]parserTest{
-	"simple let": {source: "(let ((x 1)) x)", expr: &Let{[]Binding{{"x", &Number{1}}}, &Atom{"x"}}},
+	"simple let": {source: "(let ((x 1)) x)", expr: makeLet([]Binding{{"x", makeNumber(1)}}, makeAtom("x"))},
 	"let multiple bindings": {source: "(let ((x 1) (y 2)) (+ x y))",
-		expr: &Let{[]Binding{{"x", &Number{1}}, {"y", &Number{2}}}, &NamedCall{"+", []Expr{&Atom{"x"}, &Atom{"y"}}}}},
-	"let no bindings": {source: "(let () 42)", expr: &Let{[]Binding{}, &Number{42}}},
+		expr: makeLet([]Binding{{"x", makeNumber(1)}, {"y", makeNumber(2)}}, makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeAtom("y")}))},
+	"let no bindings": {source: "(let () 42)", expr: makeLet([]Binding{}, makeNumber(42))},
 	"let nested": {source: "(let ((x 1)) (let ((y 2)) (+ x y)))",
-		expr: &Let{[]Binding{{"x", &Number{1}}}, &Let{[]Binding{{"y", &Number{2}}}, &NamedCall{"+", []Expr{&Atom{"x"}, &Atom{"y"}}}}}},
+		expr: makeLet([]Binding{{"x", makeNumber(1)}}, makeLet([]Binding{{"y", makeNumber(2)}}, makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeAtom("y")})))},
 	// Edge cases for let
 	"let complex bindings": {source: "(let ((f (lambda (x) (* x x))) (y 5)) (f y))",
-		expr: &Let{[]Binding{{"f", &Function{"", []string{"x"}, "", &NamedCall{"*", []Expr{&Atom{"x"}, &Atom{"x"}}}}}, {"y", &Number{5}}}, &NamedCall{"f", []Expr{&Atom{"y"}}}}},
+		expr: makeLet([]Binding{{"f", makeFunction("", []string{"x"}, "", makeCall(makeAtom("*"), []Expr{makeAtom("x"), makeAtom("x")}))}, {"y", makeNumber(5)}}, makeCall(makeAtom("f"), []Expr{makeAtom("y")}))},
 	"let recursive binding": {source: "(let ((x (+ y 1)) (y 5)) x)",
-		expr: &Let{[]Binding{{"x", &NamedCall{"+", []Expr{&Atom{"y"}, &Number{1}}}}, {"y", &Number{5}}}, &Atom{"x"}}},
+		expr: makeLet([]Binding{{"x", makeCall(makeAtom("+"), []Expr{makeAtom("y"), makeNumber(1)})}, {"y", makeNumber(5)}}, makeAtom("x"))},
 	"let shadowing": {source: "(let ((x 1)) (let ((x 2)) x))",
-		expr: &Let{[]Binding{{"x", &Number{1}}}, &Let{[]Binding{{"x", &Number{2}}}, &Atom{"x"}}}},
+		expr: makeLet([]Binding{{"x", makeNumber(1)}}, makeLet([]Binding{{"x", makeNumber(2)}}, makeAtom("x")))},
 }
 
 var complexTests = map[string]parserTest{
 	"map function": {
 		source: "(define map (lambda (f xs) (if (null? xs) '() (cons (f (car xs)) (map f (cdr xs))))))",
-		expr: &Define{"map", &Function{"map", []string{"f", "xs"}, "",
-			&NamedCall{"if", []Expr{
-				&NamedCall{"null?", []Expr{&Atom{"xs"}}},
-				&Quote{&Nil{}},
-				&NamedCall{"cons", []Expr{
-					&NamedCall{"f", []Expr{&NamedCall{"car", []Expr{&Atom{"xs"}}}}},
-					&NamedCall{"map", []Expr{&Atom{"f"}, &NamedCall{"cdr", []Expr{&Atom{"xs"}}}}},
-				}},
-			}}}},
+		expr: makeDefine("map", makeFunction("map", []string{"f", "xs"}, "",
+			makeCall(makeAtom("if"), []Expr{
+				makeCall(makeAtom("null?"), []Expr{makeAtom("xs")}),
+				makeQuote(makeNil()),
+				makeCall(makeAtom("cons"), []Expr{
+					makeCall(makeAtom("f"), []Expr{makeCall(makeAtom("car"), []Expr{makeAtom("xs")})}),
+					makeCall(makeAtom("map"), []Expr{makeAtom("f"), makeCall(makeAtom("cdr"), []Expr{makeAtom("xs")})}),
+				}),
+			}))),
 	},
 	"nested structures": {
 		source: "(let ((f (lambda (x) (* x x)))) (f (+ 2 3)))",
-		expr: &Let{[]Binding{{"f", &Function{"", []string{"x"}, "", &NamedCall{"*", []Expr{&Atom{"x"}, &Atom{"x"}}}}}},
-			&NamedCall{"f", []Expr{&NamedCall{"+", []Expr{&Number{2}, &Number{3}}}}}},
+		expr: makeLet([]Binding{{"f", makeFunction("", []string{"x"}, "", makeCall(makeAtom("*"), []Expr{makeAtom("x"), makeAtom("x")}))}},
+			makeCall(makeAtom("f"), []Expr{makeCall(makeAtom("+"), []Expr{makeNumber(2), makeNumber(3)})})),
 	},
 	// More complex edge cases
 	"y combinator": {
 		source: "(lambda (f) ((lambda (x) (f (x x))) (lambda (x) (f (x x)))))",
-		expr:   &Function{"", []string{"f"}, "", &Call{&Function{"", []string{"x"}, "", &NamedCall{"f", []Expr{&NamedCall{"x", []Expr{&Atom{"x"}}}}}}, []Expr{&Function{"", []string{"x"}, "", &NamedCall{"f", []Expr{&NamedCall{"x", []Expr{&Atom{"x"}}}}}}}}},
+		expr:   makeFunction("", []string{"f"}, "", makeCall(makeFunction("", []string{"x"}, "", makeCall(makeAtom("f"), []Expr{makeCall(makeAtom("x"), []Expr{makeAtom("x")})})), []Expr{makeFunction("", []string{"x"}, "", makeCall(makeAtom("f"), []Expr{makeCall(makeAtom("x"), []Expr{makeAtom("x")})}))})),
 	},
 	"deeply nested let": {
 		source: "(let ((a 1)) (let ((b 2)) (let ((c 3)) (+ a b c))))",
-		expr:   &Let{[]Binding{{"a", &Number{1}}}, &Let{[]Binding{{"b", &Number{2}}}, &Let{[]Binding{{"c", &Number{3}}}, &NamedCall{"+", []Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}}}}}},
+		expr:   makeLet([]Binding{{"a", makeNumber(1)}}, makeLet([]Binding{{"b", makeNumber(2)}}, makeLet([]Binding{{"c", makeNumber(3)}}, makeCall(makeAtom("+"), []Expr{makeAtom("a"), makeAtom("b"), makeAtom("c")})))),
 	},
 }
 
@@ -333,16 +365,16 @@ var programTests = map[string]struct {
 	source string
 	exprs  []Expr
 }{
-	"single expr":    {source: "42", exprs: []Expr{&Number{42}}},
-	"multiple exprs": {source: "1 2 'hello", exprs: []Expr{&Number{1}, &Number{2}, &Quote{&Atom{"hello"}}}},
+	"single expr":    {source: "42", exprs: []Expr{makeNumber(42)}},
+	"multiple exprs": {source: "1 2 'hello", exprs: []Expr{makeNumber(1), makeNumber(2), makeQuote(makeAtom("hello"))}},
 	"mixed exprs": {source: "(define x 1) (+ x 2)", exprs: []Expr{
-		&Define{"x", &Number{1}},
-		&NamedCall{"+", []Expr{&Atom{"x"}, &Number{2}}},
+		makeDefine("x", makeNumber(1)),
+		makeCall(makeAtom("+"), []Expr{makeAtom("x"), makeNumber(2)}),
 	}},
 	"empty program":       {source: "", exprs: []Expr{}},
 	"whitespace only":     {source: "   \n\t  ", exprs: []Expr{}},
 	"comments only":       {source: "; This is a comment\n; Another comment", exprs: []Expr{}},
-	"mixed with comments": {source: "; Start\n42 ; middle\n'hello ; end", exprs: []Expr{&Number{42}, &Quote{&Atom{"hello"}}}},
+	"mixed with comments": {source: "; Start\n42 ; middle\n'hello ; end", exprs: []Expr{makeNumber(42), makeQuote(makeAtom("hello"))}},
 }
 
 func TestParseAtoms(t *testing.T) {
@@ -416,8 +448,8 @@ func TestParseNamedCalls(t *testing.T) {
 			if !exprsEqual(tc.expr, expr) {
 				t.Errorf("expected %#v, got %#v", tc.expr, expr)
 			}
-			if _, ok := expr.(*NamedCall); !ok {
-				t.Errorf("expected NamedCall, got %T", expr)
+			if _, ok := expr.(*Call); !ok {
+				t.Errorf("expected Call, got %T", expr)
 			}
 		})
 	}
@@ -526,7 +558,7 @@ func TestParsePrograms(t *testing.T) {
 func TestParseList(t *testing.T) {
 	parser := newTestParser("test", "a b c)")
 	args := parser.parseList()
-	expected := []Expr{&Atom{"a"}, &Atom{"b"}, &Atom{"c"}}
+	expected := []Expr{makeAtom("a"), makeAtom("b"), makeAtom("c")}
 	if len(args) != len(expected) {
 		t.Errorf("expected %d args, got %d", len(expected), len(args))
 	}
@@ -568,15 +600,15 @@ func TestParseEdgeCases(t *testing.T) {
 	}{
 		"signed atom": {
 			source:   "+symbol",
-			expected: &Atom{"+symbol"},
+			expected: makeAtom("+symbol"),
 		},
 		"negative atom": {
 			source:   "-symbol",
-			expected: &Atom{"-symbol"},
+			expected: makeAtom("-symbol"),
 		},
 		"complex nested quote": {
 			source:   "'''x",
-			expected: &Quote{&Quote{&Quote{&Atom{"x"}}}},
+			expected: makeQuote(makeQuote(makeQuote(makeAtom("x")))),
 		},
 	}
 
@@ -591,36 +623,6 @@ func TestParseEdgeCases(t *testing.T) {
 	}
 }
 
-func TestCallVsNamedCallDistinction(t *testing.T) {
-	// Test that atom function calls create NamedCall
-	parser1 := newTestParser("test1", "(f x)")
-	expr1 := parser1.parseExpr()
-	if _, ok := expr1.(*NamedCall); !ok {
-		t.Errorf("expected NamedCall for atom function, got %T", expr1)
-	}
-
-	// Test that lambda function calls create Call
-	parser2 := newTestParser("test2", "((lambda (x) x) y)")
-	expr2 := parser2.parseExpr()
-	if _, ok := expr2.(*Call); !ok {
-		t.Errorf("expected Call for lambda function, got %T", expr2)
-	}
-
-	// Test that they have different string representations but we check structurally
-	namedCall := &NamedCall{"f", []Expr{&Atom{"x"}}}
-	call := &Call{&Atom{"f"}, []Expr{&Atom{"x"}}}
-
-	// These should have the same string representation
-	if namedCall.String() != call.String() {
-		t.Errorf("string representations differ: %s vs %s", namedCall.String(), call.String())
-	}
-
-	// But they should be structurally different
-	if namedCall.Equal(call) {
-		t.Errorf("Call and NamedCall should be structurally different")
-	}
-}
-
 func TestWhitespaceAndComments(t *testing.T) {
 	tests := map[string]struct {
 		source   string
@@ -628,31 +630,31 @@ func TestWhitespaceAndComments(t *testing.T) {
 	}{
 		"leading whitespace": {
 			source:   "   42",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"trailing whitespace": {
 			source:   "42   ",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"mixed whitespace": {
 			source:   "\t\n  42  \n\t",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"comment at end": {
 			source:   "42 ; this is a comment",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"comment at start": {
 			source:   "; comment\n42",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"multiple comments": {
 			source:   "; first\n42 ; second\n; third",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 		"comment with special chars": {
 			source:   "; comment with () ' \" special chars\n42",
-			expected: []Expr{&Number{42}},
+			expected: []Expr{makeNumber(42)},
 		},
 	}
 
