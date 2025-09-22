@@ -2,21 +2,17 @@ package compiler
 
 //go:generate stringer -output opcode_string.go -type OpCode
 
-import (
-	"math"
-
-	"tomaskala.com/glisp/internal/tokenizer"
-)
+import "math"
 
 type Chunk struct {
 	Code      []OpCode
 	Constants []Value
-	Positions []tokenizer.Position
+	Lines     []int
 }
 
-func (c *Chunk) write(code OpCode, pos tokenizer.Position) {
+func (c *Chunk) write(code OpCode, line int) {
 	c.Code = append(c.Code, code)
-	c.Positions = append(c.Positions, pos)
+	c.Lines = append(c.Lines, line)
 }
 
 func (c *Chunk) addConstant(constant Value) int {
@@ -35,13 +31,18 @@ const (
 	OpConstant OpCode = iota
 	OpNil
 	OpCall
+	OpTailCall
 	OpReturn
 	OpGetLocal
-	OpGetUpvalue
-	OpGetGlobal
 	OpSetLocal
+	OpGetUpvalue
+	OpSetUpvalue
+	OpGetGlobal
+	OpDefineGlobal
 	OpSetGlobal
 	OpClosure
-	OpCloseUpvalue
 	OpPop
+	OpJump
+	OpJumpIfFalse
+	OpJumpIfTrue
 )

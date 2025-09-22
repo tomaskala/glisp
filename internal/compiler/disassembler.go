@@ -48,21 +48,31 @@ func (d *Disassembler) disassemble(prefix string) {
 		case OpCall:
 			argCount := int(d.readOpCode())
 			d.writeOpf("Call/%d", argCount)
+		case OpTailCall:
+			argCount := int(d.readOpCode())
+			d.writeOpf("TailCall/%d", argCount)
 		case OpReturn:
 			d.writeOpf("Return")
 		case OpGetLocal:
 			idx := int(d.readOpCode())
 			d.writeOpf("GetLocal (%d)", idx)
+		case OpSetLocal:
+			idx := int(d.readOpCode())
+			d.writeOpf("SetLocal (%d)", idx)
 		case OpGetUpvalue:
 			idx := int(d.readOpCode())
 			d.writeOpf("GetUpvalue (%d)", idx)
+		case OpSetUpvalue:
+			idx := int(d.readOpCode())
+			d.writeOpf("SetUpvalue (%d)", idx)
 		case OpGetGlobal:
 			idx := int(d.readOpCode())
 			atom := d.chunk.Constants[idx].(Atom)
 			d.writeOpf("GetGlobal %v (%d)", atom, idx)
-		case OpSetLocal:
+		case OpDefineGlobal:
 			idx := int(d.readOpCode())
-			d.writeOpf("SetLocal (%d)", idx)
+			atom := d.chunk.Constants[idx].(Atom)
+			d.writeOpf("DefineGlobal %v (%d)", atom, idx)
 		case OpSetGlobal:
 			idx := int(d.readOpCode())
 			atom := d.chunk.Constants[idx].(Atom)
@@ -73,12 +83,22 @@ func (d *Disassembler) disassemble(prefix string) {
 			d.writeOpf("Closure %v (%d)", function, idx)
 			funcD := &Disassembler{chunk: function.Chunk, w: d.w}
 			funcD.disassemble(function.Name)
-		case OpCloseUpvalue:
-			d.writeOpf("CloseUpvalue")
 		case OpPop:
 			d.writeOpf("Pop")
+		case OpJump:
+			offset := int(d.readOpCode())
+			target := d.ip + offset
+			d.writeOpf("Jump -> %04x (offset %d)", target, offset)
+		case OpJumpIfFalse:
+			offset := int(d.readOpCode())
+			target := d.ip + offset
+			d.writeOpf("JumpIfFalse -> %04x (offset %d)", target, offset)
+		case OpJumpIfTrue:
+			offset := int(d.readOpCode())
+			target := d.ip + offset
+			d.writeOpf("JumpIfTrue -> %04x (offset %d)", target, offset)
 		default:
-			d.writeOpf("%v", op)
+			panic(fmt.Sprintf("Unknown opcode: %v", op))
 		}
 	}
 	if prefix != "" {

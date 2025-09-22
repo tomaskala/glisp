@@ -2,8 +2,10 @@ package compiler
 
 import (
 	"fmt"
+	"slices"
 
-	"tomaskala.com/glisp/internal/parser"
+	"tomaskala.com/glisp/internal/ast"
+	"tomaskala.com/glisp/internal/expander"
 	"tomaskala.com/glisp/internal/tokenizer"
 )
 
@@ -37,15 +39,17 @@ type Compiler struct {
 	scopeDepth int       // The nesting level of the function's local variables, 0 being the global scope.
 }
 
-func Compile(name string, program *parser.Program) (prog *Program, err error) {
+func Compile(name string, program *ast.Program) (prog *Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(*CompileError)
 		}
 	}()
+	expandedProgram := expander.Expand(program)
 	compiler := newCompiler(nil, name, 0)
-	prog = compiler.compileProgram(program)
-	return prog, err
+	compiler.compileExpr(expandedProgram, false)
+	topLevel := compiler.end(program)
+	return &Program{topLevel}, err
 }
 
 func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
@@ -56,32 +60,31 @@ func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
 }
 
 func (c *Compiler) emit1(code OpCode, token tokenizer.Token) {
-	c.function.Chunk.write(code, token.Pos)
+	c.function.Chunk.write(code, token.Pos.Line)
 }
 
 func (c *Compiler) emit2(code1, code2 OpCode, token tokenizer.Token) {
-	c.function.Chunk.write(code1, token.Pos)
-	c.function.Chunk.write(code2, token.Pos)
+	c.function.Chunk.write(code1, token.Pos.Line)
+	c.function.Chunk.write(code2, token.Pos.Line)
 }
 
-func (c *Compiler) end(expr parser.Expr) *Function {
-	c.emit1(OpReturn, expr.Token())
+func (c *Compiler) emitJump(code OpCode, token tokenizer.Token) int {
+	c.emit2(code, opcodeInt(OpCodeMax), token)
+	return len(c.function.Chunk.Code) - 1
+}
+
+func (c *Compiler) patchJump(offset int) {
+	jump := len(c.function.Chunk.Code) - 1 - offset
+	c.function.Chunk.Code[offset] = opcodeInt(jump)
+}
+
+func (c *Compiler) end(node ast.Node) *Function {
+	c.emit1(OpReturn, node.Token())
 	return c.function
 }
 
 func (c *Compiler) beginScope() {
 	c.scopeDepth++
-}
-
-func (c *Compiler) endScope(scopedExpr parser.Expr) {
-	c.scopeDepth--
-	for len(c.locals) > 0 && c.locals[len(c.locals)-1].Depth > c.scopeDepth {
-		local := c.locals[len(c.locals)-1]
-		if local.IsCaptured {
-			c.emit1(OpCloseUpvalue, scopedExpr.Token())
-		}
-		c.locals = c.locals[:len(c.locals)-1]
-	}
 }
 
 func opcodeInt(n int) OpCode {
@@ -118,8 +121,8 @@ func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
 }
 
 func (c *Compiler) resolveLocal(name string) (int, bool) {
-	for i := len(c.locals) - 1; i >= 0; i-- {
-		if c.locals[i].Name == name {
+	for i, local := range slices.Backward(c.locals) {
+		if local.Name == name {
 			return i, true
 		}
 	}
@@ -140,9 +143,57 @@ func (c *Compiler) resolveUpvalue(name string) (int, bool) {
 	return -1, false
 }
 
-func (c *Compiler) compileProgram(program *parser.Program) *Program {
+func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
+	switch n := node.(type) {
+	case *ast.Program:
+		c.compileProgram(n)
+	case *ast.Nil:
+		c.emit1(OpNil, n.Token())
+	case *ast.Atom:
+		c.compileAtom(n)
+	case *ast.Number:
+		val := Number(n.Value)
+		idx := c.addConstant(val)
+		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+	case *ast.Quote:
+		if _, ok := n.Value.(*ast.Nil); ok {
+			c.emit1(OpNil, n.Token())
+			return
+		}
+		val := c.compileQuoted(n.Value)
+		idx := c.addConstant(val)
+		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+	case *ast.Call:
+		c.compileCall(n, tailPosition)
+	case *ast.Function:
+		c.compileFunction(n)
+	case *ast.Define:
+		c.compileExpr(n.Value, false)
+		idx := c.addConstant(Atom(n.Name))
+		c.emit2(OpDefineGlobal, opcodeInt(idx), n.Token())
+		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+	case *ast.Let:
+		panic(&CompileError{"Unexpanded let expression"})
+	case *ast.If:
+		c.compileIf(n, tailPosition)
+	case *ast.Cond:
+		c.compileCond(n, tailPosition)
+	case *ast.And:
+		c.compileAnd(n, tailPosition)
+	case *ast.Or:
+		c.compileOr(n, tailPosition)
+	case *ast.Set:
+		c.compileSet(n)
+	case *ast.Begin:
+		c.compileBegin(n, tailPosition)
+	default:
+		panic(&CompileError{fmt.Sprintf("Unrecognized expression type: %v", node)})
+	}
+}
+
+func (c *Compiler) compileProgram(program *ast.Program) {
 	for i, expr := range program.Exprs {
-		c.compileExpr(expr)
+		c.compileExpr(expr, false)
 		// Pop all intermediate values except for the last one - REPL friendly.
 		if i < len(program.Exprs)-1 {
 			c.emit1(OpPop, expr.Token())
@@ -152,44 +203,9 @@ func (c *Compiler) compileProgram(program *parser.Program) *Program {
 	if len(program.Exprs) == 0 {
 		c.emit1(OpNil, program.Token())
 	}
-	topLevel := c.end(program)
-	return &Program{topLevel}
 }
 
-func (c *Compiler) compileExpr(expr parser.Expr) {
-	switch e := expr.(type) {
-	case *parser.Nil:
-		c.emit1(OpNil, e.Token())
-	case *parser.Atom:
-		c.compileAtom(e)
-	case *parser.Number:
-		val := Number(e.Value)
-		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), e.Token())
-	case *parser.Quote:
-		if _, ok := e.Value.(*parser.Nil); ok {
-			c.emit1(OpNil, e.Token())
-			return
-		}
-		val := c.compileQuoted(e.Value)
-		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), e.Token())
-	case *parser.Call:
-		c.compileCall(e)
-	case *parser.Function:
-		c.compileFunction(e)
-	case *parser.Define:
-		c.compileExpr(e.Value)
-		idx := c.addConstant(Atom(e.Name))
-		c.emit2(OpSetGlobal, opcodeInt(idx), e.Token())
-	case *parser.Let:
-		c.compileLet(e)
-	default:
-		panic(&CompileError{fmt.Sprintf("Unrecognized expression type: %v", expr)})
-	}
-}
-
-func (c *Compiler) compileAtom(atom *parser.Atom) {
+func (c *Compiler) compileAtom(atom *ast.Atom) {
 	if idx, ok := c.resolveLocal(atom.Name); ok {
 		c.emit2(OpGetLocal, opcodeInt(idx), atom.Token())
 		return
@@ -202,54 +218,87 @@ func (c *Compiler) compileAtom(atom *parser.Atom) {
 	c.emit2(OpGetGlobal, opcodeInt(idx), atom.Token())
 }
 
-func (c *Compiler) compileQuoted(expr parser.Expr) Value {
+func (c *Compiler) compileQuoted(node ast.Node) Value {
 	// Quoted Nil is handled outside of this function so that we can emit OpConstant
 	// with this function's result.
-	switch e := expr.(type) {
-	case *parser.Atom:
-		return Atom(e.Name)
-	case *parser.Number:
-		return Number(e.Value)
-	case *parser.Quote:
-		return c.compileQuoted(e.Value)
-	case *parser.Call:
-		var cons Value = NilVal
-		for i := len(e.Args) - 1; i >= 0; i-- {
-			cons = Cons(c.compileQuoted(e.Args[i]), cons)
+	switch n := node.(type) {
+	case *ast.Atom:
+		return Atom(n.Name)
+	case *ast.Number:
+		return Number(n.Value)
+	case *ast.Quote:
+		return c.compileQuoted(n.Value)
+	case *ast.Call:
+		var cons Value = Null
+		for _, arg := range slices.Backward(n.Args) {
+			cons = Cons(c.compileQuoted(arg), cons)
 		}
-		return Cons(c.compileQuoted(e.Func), cons)
-	case *parser.Function:
-		var params Value = NilVal
-		if e.RestParam != "" {
-			params = Atom(e.RestParam)
+		return Cons(c.compileQuoted(n.Func), cons)
+	case *ast.Function:
+		var params Value = Null
+		if n.RestParam != "" {
+			params = Atom(n.RestParam)
 		}
-		for i := len(e.Params) - 1; i >= 0; i-- {
-			params = Cons(Atom(e.Params[i]), params)
+		for _, param := range slices.Backward(n.Params) {
+			params = Cons(Atom(param), params)
 		}
-		return Cons(Atom("lambda"), Cons(params, Cons(c.compileQuoted(e.Body), NilVal)))
-	case *parser.Define:
-		return Cons(Atom("define"), Cons(Atom(e.Name), Cons(c.compileQuoted(e.Value), NilVal)))
-	case *parser.Let:
-		var bindings Value = NilVal
-		for i := len(e.Bindings) - 1; i >= 0; i-- {
-			binding := Cons(Atom(e.Bindings[i].Name), Cons(c.compileQuoted(e.Bindings[i].Value), NilVal))
-			bindings = Cons(binding, bindings)
+		return Cons(Atom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Null)))
+	case *ast.Define:
+		return Cons(Atom("define"), Cons(Atom(n.Name), Cons(c.compileQuoted(n.Value), Null)))
+	case *ast.Let:
+		panic(&CompileError{"Unexpanded let expression"})
+	case *ast.If:
+		cond := c.compileQuoted(n.Cond)
+		thenBranch := c.compileQuoted(n.Then)
+		elseBranch := c.compileQuoted(n.Else)
+		return Cons(Atom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Null))))
+	case *ast.Cond:
+		var clauses Value = Null
+		for _, cl := range slices.Backward(n.Clauses) {
+			cond := c.compileQuoted(cl.Cond)
+			value := c.compileQuoted(cl.Value)
+			clause := Cons(cond, Cons(value, Null))
+			clauses = Cons(clause, clauses)
 		}
-		return Cons(Atom("let"), Cons(bindings, Cons(c.compileQuoted(e.Body), NilVal)))
+		return Cons(Atom("cond"), clauses)
+	case *ast.And:
+		var exprs Value = Null
+		for _, expr := range slices.Backward(n.Exprs) {
+			exprs = Cons(c.compileQuoted(expr), exprs)
+		}
+		return Cons(Atom("and"), exprs)
+	case *ast.Or:
+		var exprs Value = Null
+		for _, expr := range slices.Backward(n.Exprs) {
+			exprs = Cons(c.compileQuoted(expr), exprs)
+		}
+		return Cons(Atom("or"), exprs)
+	case *ast.Set:
+		return Cons(Atom("set!"), Cons(Atom(n.Variable), Cons(c.compileQuoted(n.Value), Null)))
+	case *ast.Begin:
+		var exprs Value = Cons(c.compileQuoted(n.Tail), Null)
+		for _, expr := range slices.Backward(n.Exprs) {
+			exprs = Cons(c.compileQuoted(expr), exprs)
+		}
+		return Cons(Atom("begin"), exprs)
 	default:
-		panic(&CompileError{fmt.Sprintf("Unexpected quoted expression type: %v", expr)})
+		panic(&CompileError{fmt.Sprintf("Unexpected quoted expression type: %v", node)})
 	}
 }
 
-func (c *Compiler) compileCall(call *parser.Call) {
-	c.compileExpr(call.Func)
+func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
+	c.compileExpr(call.Func, false)
 	for _, a := range call.Args {
-		c.compileExpr(a)
+		c.compileExpr(a, false)
 	}
-	c.emit2(OpCall, opcodeInt(len(call.Args)), call.Token())
+	if tailPosition {
+		c.emit2(OpTailCall, opcodeInt(len(call.Args)), call.Token())
+	} else {
+		c.emit2(OpCall, opcodeInt(len(call.Args)), call.Token())
+	}
 }
 
-func (c *Compiler) compileFunction(f *parser.Function) {
+func (c *Compiler) compileFunction(f *ast.Function) {
 	compiler := newCompiler(c, f.Name, len(f.Params))
 	// We don't need to end the scope here, because once a function compilation
 	// has finished, we end the entire compiler responsible.
@@ -261,19 +310,107 @@ func (c *Compiler) compileFunction(f *parser.Function) {
 		compiler.addLocal(f.RestParam)
 		compiler.function.HasRestParam = true
 	}
-	compiler.compileExpr(f.Body)
+	compiler.compileExpr(f.Body, true)
 	function := compiler.end(f)
 	idx := c.addConstant(function)
 	c.emit2(OpClosure, opcodeInt(idx), f.Token())
 }
 
-func (c *Compiler) compileLet(l *parser.Let) {
-	c.beginScope()
-	defer c.endScope(l)
-	for _, binding := range l.Bindings {
-		c.compileExpr(binding.Value)
-		idx := c.addLocal(binding.Name)
-		c.emit2(OpSetLocal, opcodeInt(idx), l.Token())
+func (c *Compiler) compileIf(i *ast.If, tailPosition bool) {
+	c.compileExpr(i.Cond, false)
+	thenJump := c.emitJump(OpJumpIfFalse, i.Token())
+	c.emit1(OpPop, i.Token())
+	c.compileExpr(i.Then, tailPosition)
+	elseJump := c.emitJump(OpJump, i.Token())
+	c.patchJump(thenJump)
+	c.emit1(OpPop, i.Token())
+	c.compileExpr(i.Else, tailPosition)
+	c.patchJump(elseJump)
+}
+
+func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
+	if len(cond.Clauses) == 0 {
+		c.emit1(OpNil, cond.Token())
+		return
 	}
-	c.compileExpr(l.Body)
+	var endJumps []int
+	for _, clause := range cond.Clauses {
+		c.compileExpr(clause.Cond, false)
+		nextJump := c.emitJump(OpJumpIfFalse, clause.Cond.Token())
+		c.emit1(OpPop, clause.Cond.Token())
+		c.compileExpr(clause.Value, tailPosition)
+		endJump := c.emitJump(OpJump, clause.Value.Token())
+		endJumps = append(endJumps, endJump)
+		c.patchJump(nextJump)
+		c.emit1(OpPop, clause.Cond.Token())
+	}
+	c.emit1(OpNil, cond.Token())
+	for _, jump := range endJumps {
+		c.patchJump(jump)
+	}
+}
+
+func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
+	if len(and.Exprs) == 0 {
+		idx := c.addConstant(True)
+		c.emit2(OpConstant, opcodeInt(idx), and.Token())
+		return
+	}
+	var endJumps []int
+	for i, expr := range and.Exprs {
+		exprTailPosition := tailPosition && i == len(and.Exprs)-1
+		c.compileExpr(expr, exprTailPosition)
+		if i < len(and.Exprs)-1 {
+			endJump := c.emitJump(OpJumpIfFalse, expr.Token())
+			endJumps = append(endJumps, endJump)
+			c.emit1(OpPop, expr.Token())
+		}
+	}
+	for _, jump := range endJumps {
+		c.patchJump(jump)
+	}
+}
+
+func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
+	if len(or.Exprs) == 0 {
+		c.emit1(OpNil, or.Token())
+		return
+	}
+	var endJumps []int
+	for i, expr := range or.Exprs {
+		exprTailPosition := tailPosition && i == len(or.Exprs)-1
+		c.compileExpr(expr, exprTailPosition)
+		if i < len(or.Exprs)-1 {
+			endJump := c.emitJump(OpJumpIfTrue, expr.Token())
+			endJumps = append(endJumps, endJump)
+			c.emit1(OpPop, expr.Token())
+		}
+	}
+	for _, jump := range endJumps {
+		c.patchJump(jump)
+	}
+}
+
+func (c *Compiler) compileSet(set *ast.Set) {
+	if idx, ok := c.resolveLocal(set.Variable); ok {
+		c.compileExpr(set.Value, false)
+		c.emit2(OpSetLocal, opcodeInt(idx), set.Token())
+		return
+	}
+	if idx, ok := c.resolveUpvalue(set.Variable); ok {
+		c.compileExpr(set.Value, false)
+		c.emit2(OpSetUpvalue, opcodeInt(idx), set.Token())
+		return
+	}
+	idx := c.addConstant(Atom(set.Variable))
+	c.compileExpr(set.Value, false)
+	c.emit2(OpSetGlobal, opcodeInt(idx), set.Token())
+}
+
+func (c *Compiler) compileBegin(begin *ast.Begin, tailPosition bool) {
+	for _, expr := range begin.Exprs {
+		c.compileExpr(expr, false)
+		c.emit1(OpPop, begin.Token())
+	}
+	c.compileExpr(begin.Tail, tailPosition)
 }

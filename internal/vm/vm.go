@@ -1,0 +1,318 @@
+package vm
+
+import (
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+
+	"tomaskala.com/glisp/internal/compiler"
+)
+
+const framesMax = 1024
+
+type RuntimeError struct {
+	Message string
+}
+
+func (e *RuntimeError) Error() string {
+	return e.Message
+}
+
+type Frame struct {
+	closure *compiler.Closure // The currently evaluated closure.
+	ip      int               // Instruction pointer into closure.Function.Chunk.Code.
+	base    int               // Base index inside the VM's stack where this frame's locals start.
+}
+
+type VM struct {
+	frames       []Frame
+	stack        []compiler.Value
+	openUpvalues []*compiler.Upvalue
+	globals      map[compiler.Atom]compiler.Value
+}
+
+func NewVM() *VM {
+	return &VM{globals: loadNatives()}
+}
+
+func (vm *VM) push(v compiler.Value)        { vm.stack = append(vm.stack, v) }
+func (vm *VM) peek(dist int) compiler.Value { return vm.stack[len(vm.stack)-1-dist] }
+func (vm *VM) pop() compiler.Value {
+	v := vm.stack[len(vm.stack)-1]
+	vm.stack = vm.stack[:len(vm.stack)-1]
+	return v
+}
+
+func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
+	if len(vm.frames) == framesMax {
+		return vm.runtimeError("Stack overflow")
+	}
+	frame := Frame{closure: closure, base: base}
+	vm.frames = append(vm.frames, frame)
+	return nil
+}
+func (vm *VM) peekFrame() *Frame { return &vm.frames[len(vm.frames)-1] }
+func (vm *VM) popFrame()         { vm.frames = vm.frames[:len(vm.frames)-1] }
+
+func (vm *VM) runtimeError(format string, args ...any) error {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf(format, args...))
+	builder.WriteByte('\n')
+	for _, frame := range slices.Backward(vm.frames) {
+		function := frame.closure.Function
+		builder.WriteString("  in ")
+		builder.WriteString(function.Name)
+		builder.WriteString(" (line ")
+		builder.WriteString(strconv.Itoa(function.Chunk.Lines[frame.ip-1]))
+		builder.WriteString(")\n")
+	}
+	vm.frames = vm.frames[:0]
+	vm.stack = vm.stack[:0]
+	vm.openUpvalues = vm.openUpvalues[:0]
+	return &RuntimeError{builder.String()}
+}
+
+func (vm *VM) captureUpvalue(idx int) *compiler.Upvalue {
+	for _, uv := range vm.openUpvalues {
+		if !uv.IsClosed && uv.Index == idx {
+			return uv
+		}
+	}
+	uv := &compiler.Upvalue{Index: idx}
+	vm.openUpvalues = append(vm.openUpvalues, uv)
+	return uv
+}
+
+func (vm *VM) closeUpvalues(last int) {
+	remaining := vm.openUpvalues[:0]
+	for _, uv := range vm.openUpvalues {
+		if !uv.IsClosed && uv.Index >= last {
+			uv.IsClosed = true
+			uv.ClosedVal = vm.stack[uv.Index]
+			uv.Index = -1
+		} else {
+			remaining = append(remaining, uv)
+		}
+	}
+	vm.openUpvalues = remaining
+}
+
+func (vm *VM) checkArgs(closure *compiler.Closure, argCount int) error {
+	function := closure.Function
+	if !function.HasRestParam && argCount != function.Arity {
+		return vm.runtimeError("Function %s expects %d arguments, got %d", function.Name, function.Arity, argCount)
+	}
+	if function.HasRestParam && argCount < function.Arity {
+		return vm.runtimeError("Function %s expects at least %d arguments, got %d", function.Name, function.Arity, argCount)
+	}
+	return nil
+}
+
+func (vm *VM) callValue(callee compiler.Value, argCount int) error {
+	switch f := callee.(type) {
+	case *compiler.NativeFunction:
+		if f.Arity >= 0 && f.Arity != argCount {
+			return vm.runtimeError("%s expects %d arguments, got %d", f.Name, f.Arity, argCount)
+		}
+		result, err := f.Func(vm.stack[len(vm.stack)-argCount:])
+		if err != nil {
+			return vm.runtimeError("%s", err.Error())
+		}
+		vm.stack = vm.stack[:len(vm.stack)-argCount-1]
+		vm.push(result)
+		return nil
+	case *compiler.Closure:
+		if err := vm.checkArgs(f, argCount); err != nil {
+			return err
+		}
+		return vm.callClosure(f, argCount)
+	default:
+		return vm.runtimeError("Attempting to call %v", f)
+	}
+}
+
+func (vm *VM) tailCallValue(callee compiler.Value, argCount int) error {
+	switch f := callee.(type) {
+	case *compiler.NativeFunction:
+		return vm.callValue(f, argCount)
+	case *compiler.Closure:
+		if err := vm.checkArgs(f, argCount); err != nil {
+			return err
+		}
+		vm.tailCallClosure(f, argCount)
+		return nil
+	default:
+		return vm.runtimeError("Attempting to call %v", f)
+	}
+}
+
+func (vm *VM) callClosure(closure *compiler.Closure, argCount int) error {
+	function := closure.Function
+	base := len(vm.stack) - argCount
+	if function.HasRestParam {
+		var restArgs compiler.Value = compiler.Null
+		for i := argCount - 1; i >= function.Arity; i-- {
+			arg := vm.stack[base+i]
+			restArgs = compiler.Cons(arg, restArgs)
+		}
+		vm.stack = vm.stack[:base+function.Arity]
+		vm.push(restArgs)
+	}
+	return vm.pushFrame(closure, base)
+}
+
+func (vm *VM) tailCallClosure(closure *compiler.Closure, argCount int) {
+	function := closure.Function
+	currentFrame := vm.peekFrame()
+	newArgCount := argCount
+	if function.HasRestParam {
+		base := len(vm.stack) - argCount
+		var restArgs compiler.Value = compiler.Null
+		for i := argCount - 1; i >= function.Arity; i-- {
+			arg := vm.stack[base+i]
+			restArgs = compiler.Cons(arg, restArgs)
+		}
+		vm.stack = vm.stack[:base+function.Arity]
+		vm.push(restArgs)
+		newArgCount = function.Arity + 1
+	}
+	vm.closeUpvalues(currentFrame.base)
+	newBase := currentFrame.base
+	oldStackTop := len(vm.stack)
+	newArgsStart := oldStackTop - newArgCount
+	for i := 0; i < newArgCount; i++ {
+		vm.stack[newBase+i] = vm.stack[newArgsStart+i]
+	}
+	vm.stack = vm.stack[:newBase+newArgCount]
+	currentFrame.closure = closure
+	currentFrame.ip = 0
+}
+
+func readOpCode(frame *Frame) compiler.OpCode {
+	code := frame.closure.Function.Chunk.Code[frame.ip]
+	frame.ip++
+	return code
+}
+
+func readConstant(frame *Frame) compiler.Value {
+	idx := int(readOpCode(frame))
+	return frame.closure.Function.Chunk.Constants[idx]
+}
+
+func readAtom(frame *Frame) compiler.Atom {
+	return readConstant(frame).(compiler.Atom)
+}
+
+func readFunction(frame *Frame) *compiler.Function {
+	return readConstant(frame).(*compiler.Function)
+}
+
+func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
+	closure := &compiler.Closure{Function: program.Function}
+	vm.pushFrame(closure, 0)
+	for {
+		frame := vm.peekFrame()
+		opcode := readOpCode(frame)
+		switch opcode {
+		case compiler.OpConstant:
+			constant := readConstant(frame)
+			vm.push(constant)
+		case compiler.OpNil:
+			vm.push(compiler.Null)
+		case compiler.OpCall:
+			argCount := int(readOpCode(frame))
+			callee := vm.peek(argCount)
+			if err := vm.callValue(callee, argCount); err != nil {
+				return nil, err
+			}
+		case compiler.OpTailCall:
+			argCount := int(readOpCode(frame))
+			callee := vm.peek(argCount)
+			if err := vm.tailCallValue(callee, argCount); err != nil {
+				return nil, err
+			}
+		case compiler.OpReturn:
+			result := vm.pop()
+			vm.closeUpvalues(frame.base)
+			vm.popFrame()
+			if len(vm.frames) == 0 {
+				return result, nil
+			}
+			vm.stack = vm.stack[:frame.base-1]
+			vm.push(result)
+		case compiler.OpGetLocal:
+			slot := int(readOpCode(frame))
+			vm.push(vm.stack[frame.base+slot])
+		case compiler.OpSetLocal:
+			slot := int(readOpCode(frame))
+			vm.stack[frame.base+slot] = vm.pop()
+			vm.push(compiler.Null)
+		case compiler.OpGetUpvalue:
+			slot := int(readOpCode(frame))
+			upvalue := frame.closure.Upvalues[slot]
+			if upvalue.IsClosed {
+				vm.push(upvalue.ClosedVal)
+			} else {
+				vm.push(vm.stack[upvalue.Index])
+			}
+		case compiler.OpSetUpvalue:
+			slot := int(readOpCode(frame))
+			upvalue := frame.closure.Upvalues[slot]
+			if upvalue.IsClosed {
+				upvalue.ClosedVal = vm.pop()
+			} else {
+				vm.stack[upvalue.Index] = vm.pop()
+			}
+			vm.push(compiler.Null)
+		case compiler.OpGetGlobal:
+			name := readAtom(frame)
+			value, ok := vm.globals[name]
+			if !ok {
+				return nil, vm.runtimeError("Undefined variable: %s", name)
+			}
+			vm.push(value)
+		case compiler.OpDefineGlobal:
+			name := readAtom(frame)
+			vm.globals[name] = vm.pop()
+		case compiler.OpSetGlobal:
+			name := readAtom(frame)
+			if _, ok := vm.globals[name]; !ok {
+				return nil, vm.runtimeError("Attempting to set an undefined variable: %s", name)
+			}
+			vm.globals[name] = vm.pop()
+			vm.push(compiler.Null)
+		case compiler.OpClosure:
+			function := readFunction(frame)
+			closure := &compiler.Closure{
+				Function: function,
+				Upvalues: make([]*compiler.Upvalue, len(function.Upvalues)),
+			}
+			for i, uv := range function.Upvalues {
+				if uv.IsLocal {
+					closure.Upvalues[i] = vm.captureUpvalue(frame.base + uv.Index)
+				} else {
+					closure.Upvalues[i] = frame.closure.Upvalues[uv.Index]
+				}
+			}
+			vm.push(closure)
+		case compiler.OpPop:
+			vm.pop()
+		case compiler.OpJump:
+			offset := int(readOpCode(frame))
+			frame.ip += offset
+		case compiler.OpJumpIfFalse:
+			offset := int(readOpCode(frame))
+			if !compiler.IsTruthy(vm.peek(0)) {
+				frame.ip += offset
+			}
+		case compiler.OpJumpIfTrue:
+			offset := int(readOpCode(frame))
+			if compiler.IsTruthy(vm.peek(0)) {
+				frame.ip += offset
+			}
+		default:
+			return nil, vm.runtimeError("Unknown opcode: %v", opcode)
+		}
+	}
+}

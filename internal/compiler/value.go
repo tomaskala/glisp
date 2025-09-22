@@ -1,35 +1,35 @@
 package compiler
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
+
+var True = Atom("#t")
 
 func Cons(car, cdr Value) *Pair {
 	return &Pair{car, cdr}
 }
 
-func Car(v Value) (Value, error) {
+func Car(v Value) (Value, bool) {
 	if cons, ok := v.(*Pair); ok {
-		return cons.Car, nil
+		return cons.Car, true
 	}
-	return nil, errors.New("car on a non-pair")
+	return nil, false
 }
 
-func Cdr(v Value) (Value, error) {
+func Cdr(v Value) (Value, bool) {
 	if cons, ok := v.(*Pair); ok {
-		return cons.Cdr, nil
+		return cons.Cdr, true
 	}
-	return nil, errors.New("cdr on a non-pair")
+	return nil, false
 }
 
 func IsTruthy(v Value) bool {
-	return v != NilVal
+	return v != Null
 }
 
 type Value interface {
-	isValue() // Marker method.
 	String() string
 	Equal(other Value) bool
 }
@@ -40,7 +40,7 @@ type Atom string
 
 type Nil struct{}
 
-var NilVal = &Nil{}
+var Null = &Nil{}
 
 type Pair struct {
 	Car Value
@@ -66,20 +66,11 @@ type Closure struct {
 	Upvalues []*Upvalue
 }
 
-type Builtin struct {
-	Name   string
-	OpCode OpCode
-	Arity  int
+type NativeFunction struct {
+	Name  string
+	Arity int
+	Func  func([]Value) (Value, error)
 }
-
-func (Number) isValue()    {}
-func (Atom) isValue()      {}
-func (*Nil) isValue()      {}
-func (*Pair) isValue()     {}
-func (*Upvalue) isValue()  {}
-func (*Function) isValue() {}
-func (*Closure) isValue()  {}
-func (*Builtin) isValue()  {}
 
 func (n Number) String() string {
 	return fmt.Sprintf("%g", n)
@@ -129,8 +120,8 @@ func (c *Closure) String() string {
 	}
 	return fmt.Sprintf("<closure %s>", c.Function.Name)
 }
-func (b *Builtin) String() string {
-	return fmt.Sprintf("<builtin %s>", b.Name)
+func (n *NativeFunction) String() string {
+	return fmt.Sprintf("<native %s>", n.Name)
 }
 
 func (n Number) Equal(other Value) bool {
@@ -173,7 +164,7 @@ func (c *Closure) Equal(other Value) bool {
 	// Closure is only equal to itself.
 	return c == other
 }
-func (b *Builtin) Equal(other Value) bool {
-	// Builtin is only equal to itself.
-	return b == other
+func (n *NativeFunction) Equal(other Value) bool {
+	// Native function is only equal to itself.
+	return n == other
 }
