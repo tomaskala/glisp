@@ -7,15 +7,25 @@ import (
 	"os"
 
 	"github.com/chzyer/readline"
+
+	"tomaskala.com/glisp/internal/compiler"
+	"tomaskala.com/glisp/internal/parser"
 )
 
 const (
 	exitSuccess      = 0
 	exitIoError      = 1
 	exitParseError   = 2
-	exitRuntimeError = 3
-	exitGeneralError = 4
+	exitCompileError = 3
+	exitRuntimeError = 4
+	exitGeneralError = 5
 )
+
+var disassemble bool
+
+func init() {
+	flag.BoolVar(&disassemble, "disassemble", false, "Whether to disassemble each expression")
+}
 
 func runRepl() int {
 	completer := readline.NewPrefixCompleter()
@@ -41,18 +51,42 @@ func runRepl() int {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return exitIoError
 		}
-		// TODO: Parse & evaluate the line & print the result.
+		program, err := parser.Parse("REPL", line)
+		if err != nil {
+			fmt.Fprintf(rl.Stderr(), "Parse error: %v\n", err)
+			continue
+		}
+		compiledProgram, err := compiler.Compile("REPL", program)
+		if err != nil {
+			fmt.Fprintf(rl.Stderr(), "Compile error: %v\n", err)
+			continue
+		}
+		if disassemble {
+			compiledProgram.Disassemble(rl.Stderr())
+		}
 	}
 	return exitSuccess
 }
 
 func runScript(path string) int {
-	_, err := os.ReadFile(path)
+	source, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
 		return exitIoError
 	}
-	// TODO: Parse & Evaluate the source & print the errors if any.
+	program, err := parser.Parse(path, string(source))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return exitParseError
+	}
+	compiledProgram, err := compiler.Compile(path, program)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return exitCompileError
+	}
+	if disassemble {
+		compiledProgram.Disassemble(os.Stderr)
+	}
 	return exitSuccess
 }
 
