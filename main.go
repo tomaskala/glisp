@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/chzyer/readline"
@@ -24,11 +27,9 @@ const (
 	prompt = "λ "
 )
 
-var disassemble bool
-
-func init() {
-	flag.BoolVar(&disassemble, "disassemble", false, "Whether to disassemble each expression")
-}
+var disassemble = flag.Bool("disassemble", false, "disassemble each expression")
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 
 func balancedParentheses(lines []string) bool {
 	var stack []rune
@@ -107,7 +108,7 @@ func runRepl() int {
 			continue
 		}
 
-		if disassemble {
+		if *disassemble {
 			compiledProgram.Disassemble(rl.Stderr())
 		}
 
@@ -141,7 +142,7 @@ func runScript(path string) int {
 		return exitCompileError
 	}
 
-	if disassemble {
+	if *disassemble {
 		compiledProgram.Disassemble(os.Stderr)
 	}
 
@@ -157,9 +158,40 @@ func runScript(path string) int {
 
 func main() {
 	flag.Parse()
-	args := flag.Args()
-	if len(args) == 0 {
-		os.Exit(runRepl())
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
 	}
-	os.Exit(runScript(args[0]))
+
+	args := flag.Args()
+	var status int
+	if len(args) == 0 {
+		status = runRepl()
+	} else {
+		status = runScript(args[0])
+	}
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC()
+		if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
+
+	if *cpuprofile == "" && *memprofile == "" {
+		os.Exit(status)
+	}
 }
