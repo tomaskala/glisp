@@ -31,8 +31,8 @@ func evalExpr(t *testing.T, source string) compiler.Value {
 	if len(vm.stack) != 0 {
 		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(vm.stack))
 	}
-	if len(vm.frames) != 0 {
-		t.Errorf("VM frames not empty after evaluation: %d frames remaining", len(vm.frames))
+	if vm.numFrames != 0 {
+		t.Errorf("VM frames not empty after evaluation: %d frames remaining", vm.numFrames)
 	}
 	if len(vm.openUpvalues) != 0 {
 		t.Errorf("VM open upvalues not empty after evaluation: %d upvalues remaining", len(vm.openUpvalues))
@@ -831,8 +831,8 @@ func TestErrorRecovery(t *testing.T) {
 		if len(vm.stack) != 0 {
 			t.Errorf("VM stack not reset after error: %d items", len(vm.stack))
 		}
-		if len(vm.frames) != 0 {
-			t.Errorf("VM frames not reset after error: %d frames", len(vm.frames))
+		if vm.numFrames != 0 {
+			t.Errorf("VM frames not reset after error: %d frames", vm.numFrames)
 		}
 
 		// Should be able to run another program successfully

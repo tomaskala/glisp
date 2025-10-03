@@ -26,7 +26,8 @@ type Frame struct {
 }
 
 type VM struct {
-	frames       []Frame
+	numFrames    int
+	frames       [framesMax]Frame
 	stack        []compiler.Value
 	openUpvalues []*compiler.Upvalue
 	globals      map[compiler.Atom]compiler.Value
@@ -45,21 +46,21 @@ func (vm *VM) pop() compiler.Value {
 }
 
 func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
-	if len(vm.frames) == framesMax {
+	if vm.numFrames == framesMax {
 		return vm.runtimeError("Stack overflow")
 	}
-	frame := Frame{closure: closure, base: base}
-	vm.frames = append(vm.frames, frame)
+	vm.frames[vm.numFrames] = Frame{closure: closure, base: base}
+	vm.numFrames++
 	return nil
 }
-func (vm *VM) peekFrame() *Frame { return &vm.frames[len(vm.frames)-1] }
-func (vm *VM) popFrame()         { vm.frames = vm.frames[:len(vm.frames)-1] }
+func (vm *VM) peekFrame() *Frame { return &vm.frames[vm.numFrames-1] }
+func (vm *VM) popFrame()         { vm.numFrames-- }
 
 func (vm *VM) runtimeError(format string, args ...any) error {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf(format, args...))
 	builder.WriteByte('\n')
-	for _, frame := range slices.Backward(vm.frames) {
+	for _, frame := range slices.Backward(vm.frames[:vm.numFrames]) {
 		function := frame.closure.Function
 		builder.WriteString("  in ")
 		builder.WriteString(function.Name)
@@ -67,7 +68,7 @@ func (vm *VM) runtimeError(format string, args ...any) error {
 		builder.WriteString(strconv.Itoa(function.Chunk.Lines[frame.ip-1]))
 		builder.WriteString(")\n")
 	}
-	vm.frames = vm.frames[:0]
+	vm.numFrames = 0
 	vm.stack = vm.stack[:0]
 	vm.openUpvalues = vm.openUpvalues[:0]
 	return &RuntimeError{builder.String()}
@@ -236,7 +237,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			result := vm.pop()
 			vm.closeUpvalues(frame.base)
 			vm.popFrame()
-			if len(vm.frames) == 0 {
+			if vm.numFrames == 0 {
 				return result, nil
 			}
 			vm.stack = vm.stack[:frame.base-1]
