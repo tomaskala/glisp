@@ -68,21 +68,21 @@ func (d *Disassembler) disassemble(prefix string) {
 		case OpGetGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
-			d.writeOpf("GetGlobal %v (%d)", atom, idx)
+			d.writeOpf("GetGlobal %s (%d)", atom.Value(), idx)
 		case OpDefineGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
-			d.writeOpf("DefineGlobal %v (%d)", atom, idx)
+			d.writeOpf("DefineGlobal %s (%d)", atom.Value(), idx)
 		case OpSetGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
-			d.writeOpf("SetGlobal %v (%d)", atom, idx)
+			d.writeOpf("SetGlobal %s (%d)", atom.Value(), idx)
 		case OpClosure:
 			idx := int(d.readOpCode())
 			function, _ := d.chunk.Constants[idx].AsFunction()
 			d.writeOpf("Closure %v (%d)", function, idx)
 			funcD := &Disassembler{chunk: function.Chunk, w: d.w}
-			funcD.disassemble(function.Name)
+			funcD.disassemble(function.Name.Value())
 		case OpPop:
 			d.writeOpf("Pop")
 		case OpJump:

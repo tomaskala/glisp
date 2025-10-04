@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"strings"
+	"unique"
 	"unsafe"
 )
 
@@ -19,17 +20,27 @@ const (
 	TypeNative
 )
 
+type Atom unique.Handle[string]
+
+func NewAtom(s string) Atom {
+	return Atom(unique.Make(s))
+}
+
+func (a Atom) Value() string {
+	return unique.Handle[string](a).Value()
+}
+
 type Value struct {
 	typ  ValueType
 	num  float64
-	atom string
+	atom Atom
 	ptr  unsafe.Pointer
 }
 
 // Constructors
 
 func MakeNil() Value {
-	return Value{typ: TypeNil}
+	return Value{}
 }
 
 func MakeNumber(n float64) Value {
@@ -37,7 +48,7 @@ func MakeNumber(n float64) Value {
 }
 
 func MakeAtom(s string) Value {
-	return Value{typ: TypeAtom, atom: s}
+	return Value{typ: TypeAtom, atom: NewAtom(s)}
 }
 
 func MakePair(p *Pair) Value {
@@ -56,7 +67,7 @@ func MakeClosure(c *Closure) Value {
 	return Value{typ: TypeClosure, ptr: unsafe.Pointer(c)}
 }
 
-func MakeNative(n *NativeFunction) Value {
+func MakeNative(n *Native) Value {
 	return Value{typ: TypeNative, ptr: unsafe.Pointer(n)}
 }
 
@@ -77,9 +88,9 @@ func (v Value) AsNumber() (float64, bool) {
 	return v.num, true
 }
 
-func (v Value) AsAtom() (string, bool) {
+func (v Value) AsAtom() (Atom, bool) {
 	if v.typ != TypeAtom {
-		return "", false
+		return EmptyAtom, false
 	}
 	return v.atom, true
 }
@@ -112,38 +123,25 @@ func (v Value) AsClosure() (*Closure, bool) {
 	return (*Closure)(v.ptr), true
 }
 
-func (v Value) AsNative() (*NativeFunction, bool) {
+func (v Value) AsNative() (*Native, bool) {
 	if v.typ != TypeNative {
 		return nil, false
 	}
-	return (*NativeFunction)(v.ptr), true
+	return (*Native)(v.ptr), true
 }
 
 var (
-	Null = MakeNil()
-	True = MakeAtom("#t")
+	EmptyAtom = NewAtom("")
+	Nil       = MakeNil()
+	True      = MakeAtom("#t")
 )
 
 func Cons(car, cdr Value) Value {
 	return MakePair(&Pair{car, cdr})
 }
 
-func Car(v Value) (Value, bool) {
-	if cons, ok := v.AsPair(); ok {
-		return cons.Car, true
-	}
-	return Null, false
-}
-
-func Cdr(v Value) (Value, bool) {
-	if cons, ok := v.AsPair(); ok {
-		return cons.Cdr, true
-	}
-	return Null, false
-}
-
 func IsTruthy(v Value) bool {
-	return v != Null
+	return v != Nil
 }
 
 type Pair struct {
@@ -158,7 +156,7 @@ type Upvalue struct {
 }
 
 type Function struct {
-	Name         string
+	Name         Atom
 	Arity        int
 	HasRestParam bool
 	Chunk        Chunk
@@ -170,10 +168,14 @@ type Closure struct {
 	Upvalues []*Upvalue
 }
 
-type NativeFunction struct {
-	Name  string
+type Native struct {
+	Name  Atom
 	Arity int
 	Func  func([]Value) (Value, error)
+}
+
+func NewNative(name string, arity int, f func([]Value) (Value, error)) *Native {
+	return &Native{NewAtom(name), arity, f}
 }
 
 func (v Value) String() string {
@@ -183,18 +185,18 @@ func (v Value) String() string {
 	case TypeNumber:
 		return fmt.Sprintf("%g", v.num)
 	case TypeAtom:
-		return string(v.atom)
+		return v.atom.Value()
 	case TypePair:
 		return (*Pair)(v.ptr).String()
 	case TypeClosure:
 		c := (*Closure)(v.ptr)
-		if c.Function.Name == "" {
+		if c.Function.Name == EmptyAtom {
 			return "<lambda closure>"
 		}
-		return fmt.Sprintf("<closure %s>", c.Function.Name)
+		return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
 	case TypeNative:
-		nf := (*NativeFunction)(v.ptr)
-		return fmt.Sprintf("<native %s>", nf.Name)
+		nf := (*Native)(v.ptr)
+		return fmt.Sprintf("<native %s>", nf.Name.Value())
 	default:
 		return "<unknown>"
 	}
@@ -229,21 +231,21 @@ func (u *Upvalue) String() string {
 }
 
 func (f *Function) String() string {
-	if f.Name == "" {
+	if f.Name == EmptyAtom {
 		return "<lambda>"
 	}
-	return fmt.Sprintf("<function %s>", f.Name)
+	return fmt.Sprintf("<function %s>", f.Name.Value())
 }
 
 func (c *Closure) String() string {
-	if c.Function.Name == "" {
+	if c.Function.Name == EmptyAtom {
 		return "<lambda closure>"
 	}
-	return fmt.Sprintf("<closure %s>", c.Function.Name)
+	return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
 }
 
-func (n *NativeFunction) String() string {
-	return fmt.Sprintf("<native %s>", n.Name)
+func (n *Native) String() string {
+	return fmt.Sprintf("<native %s>", n.Name.Value())
 }
 
 func (v Value) Equal(other Value) bool {

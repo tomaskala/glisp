@@ -7,31 +7,31 @@ import (
 	"tomaskala.com/glisp/internal/compiler"
 )
 
-func loadNatives() map[string]compiler.Value {
-	return map[string]compiler.Value{
-		"#t":    compiler.True,
-		"cons":  compiler.MakeNative(&compiler.NativeFunction{Name: "cons", Arity: 2, Func: NativeCons}),
-		"car":   compiler.MakeNative(&compiler.NativeFunction{Name: "car", Arity: 1, Func: NativeCar}),
-		"cdr":   compiler.MakeNative(&compiler.NativeFunction{Name: "cdr", Arity: 1, Func: NativeCdr}),
-		"+":     compiler.MakeNative(&compiler.NativeFunction{Name: "+", Arity: -1, Func: NativeAdd}),
-		"-":     compiler.MakeNative(&compiler.NativeFunction{Name: "-", Arity: -1, Func: NativeSub}),
-		"*":     compiler.MakeNative(&compiler.NativeFunction{Name: "*", Arity: -1, Func: NativeMul}),
-		"/":     compiler.MakeNative(&compiler.NativeFunction{Name: "/", Arity: -1, Func: NativeDiv}),
-		"=":     compiler.MakeNative(&compiler.NativeFunction{Name: "=", Arity: 2, Func: NativeNumEq}),
-		"<":     compiler.MakeNative(&compiler.NativeFunction{Name: "<", Arity: 2, Func: NativeNumLt}),
-		"<=":    compiler.MakeNative(&compiler.NativeFunction{Name: "<=", Arity: 2, Func: NativeNumLte}),
-		">":     compiler.MakeNative(&compiler.NativeFunction{Name: ">", Arity: 2, Func: NativeNumGt}),
-		">=":    compiler.MakeNative(&compiler.NativeFunction{Name: ">=", Arity: 2, Func: NativeNumGte}),
-		"eq?":   compiler.MakeNative(&compiler.NativeFunction{Name: "eq?", Arity: 2, Func: NativeEq}),
-		"atom?": compiler.MakeNative(&compiler.NativeFunction{Name: "atom?", Arity: 1, Func: NativeIsAtom}),
-		"nil?":  compiler.MakeNative(&compiler.NativeFunction{Name: "nil?", Arity: 1, Func: NativeIsNil}),
-		"pair?": compiler.MakeNative(&compiler.NativeFunction{Name: "pair?", Arity: 1, Func: NativeIsPair}),
+func loadNatives() map[compiler.Atom]compiler.Value {
+	return map[compiler.Atom]compiler.Value{
+		compiler.NewAtom("#t"):    compiler.True,
+		compiler.NewAtom("cons"):  compiler.MakeNative(compiler.NewNative("cons", 2, NativeCons)),
+		compiler.NewAtom("car"):   compiler.MakeNative(compiler.NewNative("car", 1, NativeCar)),
+		compiler.NewAtom("cdr"):   compiler.MakeNative(compiler.NewNative("cdr", 1, NativeCdr)),
+		compiler.NewAtom("+"):     compiler.MakeNative(compiler.NewNative("+", -1, NativeAdd)),
+		compiler.NewAtom("-"):     compiler.MakeNative(compiler.NewNative("-", -1, NativeSub)),
+		compiler.NewAtom("*"):     compiler.MakeNative(compiler.NewNative("*", -1, NativeMul)),
+		compiler.NewAtom("/"):     compiler.MakeNative(compiler.NewNative("/", -1, NativeDiv)),
+		compiler.NewAtom("="):     compiler.MakeNative(compiler.NewNative("=", 2, NativeNumEq)),
+		compiler.NewAtom("<"):     compiler.MakeNative(compiler.NewNative("<", 2, NativeNumLt)),
+		compiler.NewAtom("<="):    compiler.MakeNative(compiler.NewNative("<=", 2, NativeNumLte)),
+		compiler.NewAtom(">"):     compiler.MakeNative(compiler.NewNative(">", 2, NativeNumGt)),
+		compiler.NewAtom(">="):    compiler.MakeNative(compiler.NewNative(">=", 2, NativeNumGte)),
+		compiler.NewAtom("eq?"):   compiler.MakeNative(compiler.NewNative("eq?", 2, NativeEq)),
+		compiler.NewAtom("atom?"): compiler.MakeNative(compiler.NewNative("atom?", 1, NativeIsAtom)),
+		compiler.NewAtom("nil?"):  compiler.MakeNative(compiler.NewNative("nil?", 1, NativeIsNil)),
+		compiler.NewAtom("pair?"): compiler.MakeNative(compiler.NewNative("pair?", 1, NativeIsPair)),
 		// Reuse the nil? implementation, since they behave the same way.
-		"not":      compiler.MakeNative(&compiler.NativeFunction{Name: "not", Arity: 1, Func: NativeIsNil}),
-		"set-car!": compiler.MakeNative(&compiler.NativeFunction{Name: "set-car!", Arity: 2, Func: NativeSetCar}),
-		"set-cdr!": compiler.MakeNative(&compiler.NativeFunction{Name: "set-cdr!", Arity: 2, Func: NativeSetCdr}),
-		"display":  compiler.MakeNative(&compiler.NativeFunction{Name: "display", Arity: 1, Func: NativeDisplay}),
-		"newline":  compiler.MakeNative(&compiler.NativeFunction{Name: "newline", Arity: 0, Func: NativeNewline}),
+		compiler.NewAtom("not"):      compiler.MakeNative(compiler.NewNative("not", 1, NativeIsNil)),
+		compiler.NewAtom("set-car!"): compiler.MakeNative(compiler.NewNative("set-car!", 2, NativeSetCar)),
+		compiler.NewAtom("set-cdr!"): compiler.MakeNative(compiler.NewNative("set-cdr!", 2, NativeSetCdr)),
+		compiler.NewAtom("display"):  compiler.MakeNative(compiler.NewNative("display", 1, NativeDisplay)),
+		compiler.NewAtom("newline"):  compiler.MakeNative(compiler.NewNative("newline", 0, NativeNewline)),
 	}
 }
 
@@ -42,19 +42,17 @@ func NativeCons(args []compiler.Value) (compiler.Value, error) {
 }
 
 func NativeCar(args []compiler.Value) (compiler.Value, error) {
-	car, ok := compiler.Car(args[0])
-	if !ok {
-		return compiler.Null, errors.New("car expects a pair")
+	if cons, ok := args[0].AsPair(); ok {
+		return cons.Car, nil
 	}
-	return car, nil
+	return compiler.Nil, errors.New("car expects a pair")
 }
 
 func NativeCdr(args []compiler.Value) (compiler.Value, error) {
-	cdr, ok := compiler.Cdr(args[0])
-	if !ok {
-		return compiler.Null, errors.New("cdr expects a pair")
+	if cons, ok := args[0].AsPair(); ok {
+		return cons.Cdr, nil
 	}
-	return cdr, nil
+	return compiler.Nil, errors.New("cdr expects a pair")
 }
 
 func NativeAdd(args []compiler.Value) (compiler.Value, error) {
@@ -62,7 +60,7 @@ func NativeAdd(args []compiler.Value) (compiler.Value, error) {
 	for _, arg := range args {
 		num, ok := arg.AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to add non-number")
+			return compiler.Nil, errors.New("attempting to add non-number")
 		}
 		result += num
 	}
@@ -72,22 +70,22 @@ func NativeAdd(args []compiler.Value) (compiler.Value, error) {
 func NativeSub(args []compiler.Value) (compiler.Value, error) {
 	switch len(args) {
 	case 0:
-		return compiler.Null, errors.New("- expects at least one argument")
+		return compiler.Nil, errors.New("- expects at least one argument")
 	case 1:
 		num, ok := args[0].AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to negate non-number")
+			return compiler.Nil, errors.New("attempting to negate non-number")
 		}
 		return compiler.MakeNumber(-num), nil
 	default:
 		result, ok := args[0].AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to subtract non-number")
+			return compiler.Nil, errors.New("attempting to subtract non-number")
 		}
 		for i := 1; i < len(args); i++ {
 			num, ok := args[i].AsNumber()
 			if !ok {
-				return compiler.Null, errors.New("attempting to subtract non-number")
+				return compiler.Nil, errors.New("attempting to subtract non-number")
 			}
 			result -= num
 		}
@@ -100,7 +98,7 @@ func NativeMul(args []compiler.Value) (compiler.Value, error) {
 	for _, arg := range args {
 		num, ok := arg.AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to multiply non-number")
+			return compiler.Nil, errors.New("attempting to multiply non-number")
 		}
 		result *= num
 	}
@@ -110,28 +108,28 @@ func NativeMul(args []compiler.Value) (compiler.Value, error) {
 func NativeDiv(args []compiler.Value) (compiler.Value, error) {
 	switch len(args) {
 	case 0:
-		return compiler.Null, errors.New("/ expects at least one argument")
+		return compiler.Nil, errors.New("/ expects at least one argument")
 	case 1:
 		num, ok := args[0].AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to invert non-number")
+			return compiler.Nil, errors.New("attempting to invert non-number")
 		}
 		if num == 0 {
-			return compiler.Null, errors.New("zero division")
+			return compiler.Nil, errors.New("zero division")
 		}
 		return compiler.MakeNumber(1 / num), nil
 	default:
 		result, ok := args[0].AsNumber()
 		if !ok {
-			return compiler.Null, errors.New("attempting to divide non-number")
+			return compiler.Nil, errors.New("attempting to divide non-number")
 		}
 		for i := 1; i < len(args); i++ {
 			num, ok := args[i].AsNumber()
 			if !ok {
-				return compiler.Null, errors.New("attempting to divide non-number")
+				return compiler.Nil, errors.New("attempting to divide non-number")
 			}
 			if num == 0 {
-				return compiler.Null, errors.New("zero division")
+				return compiler.Nil, errors.New("zero division")
 			}
 			result /= num
 		}
@@ -143,79 +141,79 @@ func NativeNumEq(args []compiler.Value) (compiler.Value, error) {
 	num1, ok1 := args[0].AsNumber()
 	num2, ok2 := args[1].AsNumber()
 	if !ok1 || !ok2 {
-		return compiler.Null, errors.New("= is only defined for numbers")
+		return compiler.Nil, errors.New("= is only defined for numbers")
 	}
 	if num1 == num2 {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeNumLt(args []compiler.Value) (compiler.Value, error) {
 	num1, ok1 := args[0].AsNumber()
 	num2, ok2 := args[1].AsNumber()
 	if !ok1 || !ok2 {
-		return compiler.Null, errors.New("< is only defined for numbers")
+		return compiler.Nil, errors.New("< is only defined for numbers")
 	}
 	if num1 < num2 {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeNumLte(args []compiler.Value) (compiler.Value, error) {
 	num1, ok1 := args[0].AsNumber()
 	num2, ok2 := args[1].AsNumber()
 	if !ok1 || !ok2 {
-		return compiler.Null, errors.New("<= is only defined for numbers")
+		return compiler.Nil, errors.New("<= is only defined for numbers")
 	}
 	if num1 <= num2 {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeNumGt(args []compiler.Value) (compiler.Value, error) {
 	num1, ok1 := args[0].AsNumber()
 	num2, ok2 := args[1].AsNumber()
 	if !ok1 || !ok2 {
-		return compiler.Null, errors.New("> is only defined for numbers")
+		return compiler.Nil, errors.New("> is only defined for numbers")
 	}
 	if num1 > num2 {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeNumGte(args []compiler.Value) (compiler.Value, error) {
 	num1, ok1 := args[0].AsNumber()
 	num2, ok2 := args[1].AsNumber()
 	if !ok1 || !ok2 {
-		return compiler.Null, errors.New(">= is only defined for numbers")
+		return compiler.Nil, errors.New(">= is only defined for numbers")
 	}
 	if num1 >= num2 {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeEq(args []compiler.Value) (compiler.Value, error) {
 	if args[0] == args[1] {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeIsAtom(args []compiler.Value) (compiler.Value, error) {
 	if args[0].IsAtom() {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeIsNil(args []compiler.Value) (compiler.Value, error) {
 	if compiler.IsTruthy(args[0]) {
-		return compiler.Null, nil
+		return compiler.Nil, nil
 	}
 	return compiler.True, nil
 }
@@ -224,33 +222,33 @@ func NativeIsPair(args []compiler.Value) (compiler.Value, error) {
 	if args[0].IsPair() {
 		return compiler.True, nil
 	}
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeSetCar(args []compiler.Value) (compiler.Value, error) {
 	pair, ok := args[0].AsPair()
 	if !ok {
-		return compiler.Null, errors.New("Attempting to set the car of a non-pair")
+		return compiler.Nil, errors.New("Attempting to set the car of a non-pair")
 	}
 	pair.Car = args[1]
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeSetCdr(args []compiler.Value) (compiler.Value, error) {
 	pair, ok := args[0].AsPair()
 	if !ok {
-		return compiler.Null, errors.New("Attempting to set the cdr of a non-pair")
+		return compiler.Nil, errors.New("Attempting to set the cdr of a non-pair")
 	}
 	pair.Cdr = args[1]
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeDisplay(args []compiler.Value) (compiler.Value, error) {
 	fmt.Println(args[0].String())
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }
 
 func NativeNewline([]compiler.Value) (compiler.Value, error) {
 	fmt.Println()
-	return compiler.Null, nil
+	return compiler.Nil, nil
 }

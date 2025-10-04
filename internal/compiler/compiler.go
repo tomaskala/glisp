@@ -55,7 +55,7 @@ func Compile(name string, program *ast.Program) (prog *Program, err error) {
 func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
 	return &Compiler{
 		parent:   parent,
-		function: &Function{Name: name, Arity: funcArity},
+		function: &Function{Name: NewAtom(name), Arity: funcArity},
 	}
 }
 
@@ -229,54 +229,54 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 	case *ast.Quote:
 		return c.compileQuoted(n.Value)
 	case *ast.Call:
-		var cons Value = Null
+		var cons Value = Nil
 		for _, arg := range slices.Backward(n.Args) {
 			cons = Cons(c.compileQuoted(arg), cons)
 		}
 		return Cons(c.compileQuoted(n.Func), cons)
 	case *ast.Function:
-		var params Value = Null
+		var params Value = Nil
 		if n.RestParam != "" {
 			params = MakeAtom(n.RestParam)
 		}
 		for _, param := range slices.Backward(n.Params) {
 			params = Cons(MakeAtom(param), params)
 		}
-		return Cons(MakeAtom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Null)))
+		return Cons(MakeAtom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Nil)))
 	case *ast.Define:
-		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Null)))
+		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Nil)))
 	case *ast.Let:
 		panic(&CompileError{"Unexpanded let expression"})
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
 		elseBranch := c.compileQuoted(n.Else)
-		return Cons(MakeAtom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Null))))
+		return Cons(MakeAtom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Nil))))
 	case *ast.Cond:
-		var clauses Value = Null
+		var clauses Value = Nil
 		for _, cl := range slices.Backward(n.Clauses) {
 			cond := c.compileQuoted(cl.Cond)
 			value := c.compileQuoted(cl.Value)
-			clause := Cons(cond, Cons(value, Null))
+			clause := Cons(cond, Cons(value, Nil))
 			clauses = Cons(clause, clauses)
 		}
 		return Cons(MakeAtom("cond"), clauses)
 	case *ast.And:
-		var exprs Value = Null
+		var exprs Value = Nil
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
 		return Cons(MakeAtom("and"), exprs)
 	case *ast.Or:
-		var exprs Value = Null
+		var exprs Value = Nil
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
 		return Cons(MakeAtom("or"), exprs)
 	case *ast.Set:
-		return Cons(MakeAtom("set!"), Cons(MakeAtom(n.Variable), Cons(c.compileQuoted(n.Value), Null)))
+		return Cons(MakeAtom("set!"), Cons(MakeAtom(n.Variable), Cons(c.compileQuoted(n.Value), Nil)))
 	case *ast.Begin:
-		var exprs Value = Cons(c.compileQuoted(n.Tail), Null)
+		var exprs Value = Cons(c.compileQuoted(n.Tail), Nil)
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
