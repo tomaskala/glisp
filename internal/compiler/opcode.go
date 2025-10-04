@@ -32,6 +32,7 @@ const (
 	OpNil
 	OpCall
 	OpTailCall
+	OpCallBuiltin
 	OpReturn
 	OpGetLocal
 	OpSetLocal
@@ -45,4 +46,29 @@ const (
 	OpJump
 	OpJumpIfFalse
 	OpJumpIfTrue
+)
+
+type Builtin OpCode
+
+const (
+	BuiltinCons Builtin = iota
+	BuiltinCar
+	BuiltinCdr
+	BuiltinAdd
+	BuiltinSub
+	BuiltinMul
+	BuiltinDiv
+	BuiltinNumEq
+	BuiltinNumLt
+	BuiltinNumLte
+	BuiltinNumGt
+	BuiltinNumGte
+	BuiltinEq
+	BuiltinIsAtom
+	BuiltinIsNil
+	BuiltinIsPair
+	BuiltinSetCar
+	BuiltinSetCdr
+	BuiltinDisplay
+	BuiltinNewline
 )

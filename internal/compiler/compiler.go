@@ -59,6 +59,11 @@ func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
 	}
 }
 
+func (c *Compiler) errorf(format string, args ...any) error {
+	message := fmt.Sprintf(format, args...)
+	return &CompileError{message}
+}
+
 func (c *Compiler) emit1(code OpCode, token tokenizer.Token) {
 	c.function.Chunk.write(code, token.Pos.Line)
 }
@@ -87,6 +92,7 @@ func (c *Compiler) beginScope() {
 	c.scopeDepth++
 }
 
+// TODO: Use errorf here?
 func opcodeInt(n int) OpCode {
 	if n < OpCodeMin || OpCodeMax < n {
 		panic(&CompileError{fmt.Sprintf("Program too large: constant/local index or a jump offset %d is out of bounds", n)})
@@ -173,7 +179,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 		c.emit2(OpDefineGlobal, opcodeInt(idx), n.Token())
 		c.emit2(OpConstant, opcodeInt(idx), n.Token())
 	case *ast.Let:
-		panic(&CompileError{"Unexpanded let expression"})
+		panic(c.errorf("Unexpanded let expression"))
 	case *ast.If:
 		c.compileIf(n, tailPosition)
 	case *ast.Cond:
@@ -187,7 +193,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Begin:
 		c.compileBegin(n, tailPosition)
 	default:
-		panic(&CompileError{fmt.Sprintf("Unrecognized expression type: %v", node)})
+		panic(c.errorf("Unrecognized expression type: %v", node))
 	}
 }
 
@@ -246,7 +252,7 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 	case *ast.Define:
 		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Nil)))
 	case *ast.Let:
-		panic(&CompileError{"Unexpanded let expression"})
+		panic(c.errorf("Unexpanded let expression"))
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
@@ -282,20 +288,59 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 		}
 		return Cons(MakeAtom("begin"), exprs)
 	default:
-		panic(&CompileError{fmt.Sprintf("Unexpected quoted expression type: %v", node)})
+		panic(c.errorf("Unexpected quoted expression type: %v", node))
 	}
 }
 
+var builtins map[string]Builtin = map[string]Builtin{
+	"cons":     BuiltinCons,
+	"car":      BuiltinCar,
+	"cdr":      BuiltinCdr,
+	"+":        BuiltinAdd,
+	"-":        BuiltinSub,
+	"*":        BuiltinMul,
+	"/":        BuiltinDiv,
+	"=":        BuiltinNumEq,
+	"<":        BuiltinNumLt,
+	"<=":       BuiltinNumLte,
+	">":        BuiltinNumGt,
+	">=":       BuiltinNumGte,
+	"eq?":      BuiltinEq,
+	"atom?":    BuiltinIsAtom,
+	"nil?":     BuiltinIsNil,
+	"pair?":    BuiltinIsPair,
+	"not":      BuiltinIsNil,
+	"set-car!": BuiltinSetCar,
+	"set-cdr!": BuiltinSetCdr,
+	"display":  BuiltinDisplay,
+	"newline":  BuiltinNewline,
+}
+
 func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
-	c.compileExpr(call.Func, false)
+	builtin, builtinFound := getBuiltin(call)
+	if !builtinFound {
+		c.compileExpr(call.Func, false)
+	}
 	for _, a := range call.Args {
 		c.compileExpr(a, false)
 	}
-	if tailPosition {
+	if builtinFound {
+		c.emit1(OpCallBuiltin, call.Token())
+		c.emit2(OpCode(builtin), opcodeInt(len(call.Args)), call.Token())
+	} else if tailPosition {
 		c.emit2(OpTailCall, opcodeInt(len(call.Args)), call.Token())
 	} else {
 		c.emit2(OpCall, opcodeInt(len(call.Args)), call.Token())
 	}
+}
+
+func getBuiltin(call *ast.Call) (Builtin, bool) {
+	atom, ok := call.Func.(*ast.Atom)
+	if !ok {
+		return Builtin(0), false
+	}
+	builtin, ok := builtins[atom.Name]
+	return builtin, ok
 }
 
 func (c *Compiler) compileFunction(f *ast.Function) {

@@ -17,7 +17,6 @@ const (
 	TypeUpvalue
 	TypeFunction
 	TypeClosure
-	TypeNative
 )
 
 type Atom unique.Handle[string]
@@ -55,10 +54,6 @@ func MakePair(p *Pair) Value {
 	return Value{typ: TypePair, ptr: unsafe.Pointer(p)}
 }
 
-func MakeUpvalue(u *Upvalue) Value {
-	return Value{typ: TypeUpvalue, ptr: unsafe.Pointer(u)}
-}
-
 func MakeFunction(f *Function) Value {
 	return Value{typ: TypeFunction, ptr: unsafe.Pointer(f)}
 }
@@ -67,17 +62,12 @@ func MakeClosure(c *Closure) Value {
 	return Value{typ: TypeClosure, ptr: unsafe.Pointer(c)}
 }
 
-func MakeNative(n *Native) Value {
-	return Value{typ: TypeNative, ptr: unsafe.Pointer(n)}
-}
-
 // Type checks
 
 func (v Value) IsNil() bool    { return v.typ == TypeNil }
 func (v Value) IsNumber() bool { return v.typ == TypeNumber }
 func (v Value) IsAtom() bool   { return v.typ == TypeAtom }
 func (v Value) IsPair() bool   { return v.typ == TypePair }
-func (v Value) IsNative() bool { return v.typ == TypeNative }
 
 // Type casts
 
@@ -123,13 +113,6 @@ func (v Value) AsClosure() (*Closure, bool) {
 	return (*Closure)(v.ptr), true
 }
 
-func (v Value) AsNative() (*Native, bool) {
-	if v.typ != TypeNative {
-		return nil, false
-	}
-	return (*Native)(v.ptr), true
-}
-
 var (
 	EmptyAtom = NewAtom("")
 	Nil       = MakeNil()
@@ -138,10 +121,6 @@ var (
 
 func Cons(car, cdr Value) Value {
 	return MakePair(&Pair{car, cdr})
-}
-
-func IsTruthy(v Value) bool {
-	return v != Nil
 }
 
 type Pair struct {
@@ -168,16 +147,6 @@ type Closure struct {
 	Upvalues []*Upvalue
 }
 
-type Native struct {
-	Name  Atom
-	Arity int
-	Func  func([]Value) (Value, error)
-}
-
-func NewNative(name string, arity int, f func([]Value) (Value, error)) *Native {
-	return &Native{NewAtom(name), arity, f}
-}
-
 func (v Value) String() string {
 	switch v.typ {
 	case TypeNil:
@@ -194,9 +163,6 @@ func (v Value) String() string {
 			return "<lambda closure>"
 		}
 		return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
-	case TypeNative:
-		nf := (*Native)(v.ptr)
-		return fmt.Sprintf("<native %s>", nf.Name.Value())
 	default:
 		return "<unknown>"
 	}
@@ -242,10 +208,6 @@ func (c *Closure) String() string {
 		return "<lambda closure>"
 	}
 	return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
-}
-
-func (n *Native) String() string {
-	return fmt.Sprintf("<native %s>", n.Name.Value())
 }
 
 func (v Value) Equal(other Value) bool {

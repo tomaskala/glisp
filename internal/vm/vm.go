@@ -34,7 +34,10 @@ type VM struct {
 }
 
 func NewVM() *VM {
-	return &VM{globals: loadNatives()}
+	globals := map[compiler.Atom]compiler.Value{
+		compiler.NewAtom("#t"): compiler.True,
+	}
+	return &VM{globals: globals}
 }
 
 func (vm *VM) push(v compiler.Value)        { vm.stack = append(vm.stack, v) }
@@ -43,6 +46,12 @@ func (vm *VM) pop() compiler.Value {
 	v := vm.stack[len(vm.stack)-1]
 	vm.stack = vm.stack[:len(vm.stack)-1]
 	return v
+}
+func (vm *VM) pop2() (compiler.Value, compiler.Value) {
+	v1 := vm.stack[len(vm.stack)-1]
+	v2 := vm.stack[len(vm.stack)-2]
+	vm.stack = vm.stack[:len(vm.stack)-2]
+	return v1, v2
 }
 
 func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
@@ -55,6 +64,10 @@ func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
 }
 func (vm *VM) peekFrame() *Frame { return &vm.frames[vm.numFrames-1] }
 func (vm *VM) popFrame()         { vm.numFrames-- }
+
+func isTruthy(v compiler.Value) bool {
+	return v != compiler.Nil
+}
 
 func (vm *VM) runtimeError(format string, args ...any) error {
 	var builder strings.Builder
@@ -108,42 +121,6 @@ func (vm *VM) checkArgs(closure *compiler.Closure, argCount int) error {
 		return vm.runtimeError("Function %s expects at least %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
 	}
 	return nil
-}
-
-func (vm *VM) callValue(callee compiler.Value, argCount int) error {
-	if f, ok := callee.AsNative(); ok {
-		if f.Arity >= 0 && f.Arity != argCount {
-			return vm.runtimeError("%s expects %d arguments, got %d", f.Name.Value(), f.Arity, argCount)
-		}
-		result, err := f.Func(vm.stack[len(vm.stack)-argCount:])
-		if err != nil {
-			return vm.runtimeError("%s", err.Error())
-		}
-		vm.stack = vm.stack[:len(vm.stack)-argCount-1]
-		vm.push(result)
-		return nil
-	}
-	if f, ok := callee.AsClosure(); ok {
-		if err := vm.checkArgs(f, argCount); err != nil {
-			return err
-		}
-		return vm.callClosure(f, argCount)
-	}
-	return vm.runtimeError("Attempting to call %v", callee)
-}
-
-func (vm *VM) tailCallValue(callee compiler.Value, argCount int) error {
-	if ok := callee.IsNative(); ok {
-		return vm.callValue(callee, argCount)
-	}
-	if f, ok := callee.AsClosure(); ok {
-		if err := vm.checkArgs(f, argCount); err != nil {
-			return err
-		}
-		vm.tailCallClosure(f, argCount)
-		return nil
-	}
-	return vm.runtimeError("Attempting to call %v", callee)
 }
 
 func (vm *VM) callClosure(closure *compiler.Closure, argCount int) error {
@@ -224,13 +201,31 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 		case compiler.OpCall:
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
-			if err := vm.callValue(callee, argCount); err != nil {
+			closure, ok := callee.AsClosure()
+			if !ok {
+				return compiler.Nil, vm.runtimeError("Attempting to call %v", callee)
+			}
+			if err := vm.checkArgs(closure, argCount); err != nil {
+				return compiler.Nil, err
+			}
+			if err := vm.callClosure(closure, argCount); err != nil {
 				return compiler.Nil, err
 			}
 		case compiler.OpTailCall:
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
-			if err := vm.tailCallValue(callee, argCount); err != nil {
+			closure, ok := callee.AsClosure()
+			if !ok {
+				return compiler.Nil, vm.runtimeError("Attempting to call %v", callee)
+			}
+			if err := vm.checkArgs(closure, argCount); err != nil {
+				return compiler.Nil, err
+			}
+			vm.tailCallClosure(closure, argCount)
+		case compiler.OpCallBuiltin:
+			builtin := compiler.Builtin(readOpCode(frame))
+			argCount := int(readOpCode(frame))
+			if err := vm.callBuiltin(builtin, argCount); err != nil {
 				return compiler.Nil, err
 			}
 		case compiler.OpReturn:
@@ -304,12 +299,12 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			frame.ip += offset
 		case compiler.OpJumpIfFalse:
 			offset := int(readOpCode(frame))
-			if !compiler.IsTruthy(vm.peek(0)) {
+			if !isTruthy(vm.peek(0)) {
 				frame.ip += offset
 			}
 		case compiler.OpJumpIfTrue:
 			offset := int(readOpCode(frame))
-			if compiler.IsTruthy(vm.peek(0)) {
+			if isTruthy(vm.peek(0)) {
 				frame.ip += offset
 			}
 		default:

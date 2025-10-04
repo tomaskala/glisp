@@ -51,6 +51,10 @@ func (d *Disassembler) disassemble(prefix string) {
 		case OpTailCall:
 			argCount := int(d.readOpCode())
 			d.writeOpf("TailCall/%d", argCount)
+		case OpCallBuiltin:
+			builtin := d.readOpCode()
+			d.writeOpf("CallBuiltin (%d)", builtin)
+			d.disassembleBuiltin(Builtin(builtin))
 		case OpReturn:
 			d.writeOpf("Return")
 		case OpGetLocal:
@@ -103,5 +107,53 @@ func (d *Disassembler) disassemble(prefix string) {
 	}
 	if prefix != "" {
 		d.writeF("        // %s end\n", prefix)
+	}
+}
+
+func (d *Disassembler) disassembleBuiltin(builtin Builtin) {
+	argCount := int(d.readOpCode())
+	switch builtin {
+	case BuiltinCons:
+		d.writeOpf("Cons/%d", argCount)
+	case BuiltinCar:
+		d.writeOpf("Car/%d", argCount)
+	case BuiltinCdr:
+		d.writeOpf("Cdr/%d", argCount)
+	case BuiltinAdd:
+		d.writeOpf("Add/%d", argCount)
+	case BuiltinSub:
+		d.writeOpf("Sub/%d", argCount)
+	case BuiltinMul:
+		d.writeOpf("Mul/%d", argCount)
+	case BuiltinDiv:
+		d.writeOpf("Div/%d", argCount)
+	case BuiltinNumEq:
+		d.writeOpf("NumEq/%d", argCount)
+	case BuiltinNumLt:
+		d.writeOpf("NumLt/%d", argCount)
+	case BuiltinNumLte:
+		d.writeOpf("NumLte/%d", argCount)
+	case BuiltinNumGt:
+		d.writeOpf("NumGt/%d", argCount)
+	case BuiltinNumGte:
+		d.writeOpf("NumGte/%d", argCount)
+	case BuiltinEq:
+		d.writeOpf("Eq/%d", argCount)
+	case BuiltinIsAtom:
+		d.writeOpf("IsAtom/%d", argCount)
+	case BuiltinIsNil:
+		d.writeOpf("IsNil/%d", argCount)
+	case BuiltinIsPair:
+		d.writeOpf("IsPair/%d", argCount)
+	case BuiltinSetCar:
+		d.writeOpf("SetCar/%d", argCount)
+	case BuiltinSetCdr:
+		d.writeOpf("SetCdr/%d", argCount)
+	case BuiltinDisplay:
+		d.writeOpf("Display/%d", argCount)
+	case BuiltinNewline:
+		d.writeOpf("Newline/%d", argCount)
+	default:
+		panic(fmt.Sprintf("Unknown builtin: %v", builtin))
 	}
 }
