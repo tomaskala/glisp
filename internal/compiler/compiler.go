@@ -152,7 +152,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Atom:
 		c.compileAtom(n)
 	case *ast.Number:
-		val := Number(n.Value)
+		val := MakeNumber(n.Value)
 		idx := c.addConstant(val)
 		c.emit2(OpConstant, opcodeInt(idx), n.Token())
 	case *ast.Quote:
@@ -169,7 +169,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 		c.compileFunction(n)
 	case *ast.Define:
 		c.compileExpr(n.Value, false)
-		idx := c.addConstant(Atom(n.Name))
+		idx := c.addConstant(MakeAtom(n.Name))
 		c.emit2(OpDefineGlobal, opcodeInt(idx), n.Token())
 		c.emit2(OpConstant, opcodeInt(idx), n.Token())
 	case *ast.Let:
@@ -214,7 +214,7 @@ func (c *Compiler) compileAtom(atom *ast.Atom) {
 		c.emit2(OpGetUpvalue, opcodeInt(idx), atom.Token())
 		return
 	}
-	idx := c.addConstant(Atom(atom.Name))
+	idx := c.addConstant(MakeAtom(atom.Name))
 	c.emit2(OpGetGlobal, opcodeInt(idx), atom.Token())
 }
 
@@ -223,9 +223,9 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 	// with this function's result.
 	switch n := node.(type) {
 	case *ast.Atom:
-		return Atom(n.Name)
+		return MakeAtom(n.Name)
 	case *ast.Number:
-		return Number(n.Value)
+		return MakeNumber(n.Value)
 	case *ast.Quote:
 		return c.compileQuoted(n.Value)
 	case *ast.Call:
@@ -237,21 +237,21 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 	case *ast.Function:
 		var params Value = Null
 		if n.RestParam != "" {
-			params = Atom(n.RestParam)
+			params = MakeAtom(n.RestParam)
 		}
 		for _, param := range slices.Backward(n.Params) {
-			params = Cons(Atom(param), params)
+			params = Cons(MakeAtom(param), params)
 		}
-		return Cons(Atom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Null)))
+		return Cons(MakeAtom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Null)))
 	case *ast.Define:
-		return Cons(Atom("define"), Cons(Atom(n.Name), Cons(c.compileQuoted(n.Value), Null)))
+		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Null)))
 	case *ast.Let:
 		panic(&CompileError{"Unexpanded let expression"})
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
 		elseBranch := c.compileQuoted(n.Else)
-		return Cons(Atom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Null))))
+		return Cons(MakeAtom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Null))))
 	case *ast.Cond:
 		var clauses Value = Null
 		for _, cl := range slices.Backward(n.Clauses) {
@@ -260,27 +260,27 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 			clause := Cons(cond, Cons(value, Null))
 			clauses = Cons(clause, clauses)
 		}
-		return Cons(Atom("cond"), clauses)
+		return Cons(MakeAtom("cond"), clauses)
 	case *ast.And:
 		var exprs Value = Null
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(Atom("and"), exprs)
+		return Cons(MakeAtom("and"), exprs)
 	case *ast.Or:
 		var exprs Value = Null
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(Atom("or"), exprs)
+		return Cons(MakeAtom("or"), exprs)
 	case *ast.Set:
-		return Cons(Atom("set!"), Cons(Atom(n.Variable), Cons(c.compileQuoted(n.Value), Null)))
+		return Cons(MakeAtom("set!"), Cons(MakeAtom(n.Variable), Cons(c.compileQuoted(n.Value), Null)))
 	case *ast.Begin:
 		var exprs Value = Cons(c.compileQuoted(n.Tail), Null)
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(Atom("begin"), exprs)
+		return Cons(MakeAtom("begin"), exprs)
 	default:
 		panic(&CompileError{fmt.Sprintf("Unexpected quoted expression type: %v", node)})
 	}
@@ -312,7 +312,7 @@ func (c *Compiler) compileFunction(f *ast.Function) {
 	}
 	compiler.compileExpr(f.Body, true)
 	function := compiler.end(f)
-	idx := c.addConstant(function)
+	idx := c.addConstant(MakeFunction(function))
 	c.emit2(OpClosure, opcodeInt(idx), f.Token())
 }
 
@@ -402,7 +402,7 @@ func (c *Compiler) compileSet(set *ast.Set) {
 		c.emit2(OpSetUpvalue, opcodeInt(idx), set.Token())
 		return
 	}
-	idx := c.addConstant(Atom(set.Variable))
+	idx := c.addConstant(MakeAtom(set.Variable))
 	c.compileExpr(set.Value, false)
 	c.emit2(OpSetGlobal, opcodeInt(idx), set.Token())
 }

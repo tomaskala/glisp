@@ -30,7 +30,7 @@ type VM struct {
 	frames       [framesMax]Frame
 	stack        []compiler.Value
 	openUpvalues []*compiler.Upvalue
-	globals      map[compiler.Atom]compiler.Value
+	globals      map[string]compiler.Value
 }
 
 func NewVM() *VM {
@@ -111,8 +111,7 @@ func (vm *VM) checkArgs(closure *compiler.Closure, argCount int) error {
 }
 
 func (vm *VM) callValue(callee compiler.Value, argCount int) error {
-	switch f := callee.(type) {
-	case *compiler.NativeFunction:
+	if f, ok := callee.AsNative(); ok {
 		if f.Arity >= 0 && f.Arity != argCount {
 			return vm.runtimeError("%s expects %d arguments, got %d", f.Name, f.Arity, argCount)
 		}
@@ -123,29 +122,28 @@ func (vm *VM) callValue(callee compiler.Value, argCount int) error {
 		vm.stack = vm.stack[:len(vm.stack)-argCount-1]
 		vm.push(result)
 		return nil
-	case *compiler.Closure:
+	}
+	if f, ok := callee.AsClosure(); ok {
 		if err := vm.checkArgs(f, argCount); err != nil {
 			return err
 		}
 		return vm.callClosure(f, argCount)
-	default:
-		return vm.runtimeError("Attempting to call %v", f)
 	}
+	return vm.runtimeError("Attempting to call %v", callee)
 }
 
 func (vm *VM) tailCallValue(callee compiler.Value, argCount int) error {
-	switch f := callee.(type) {
-	case *compiler.NativeFunction:
-		return vm.callValue(f, argCount)
-	case *compiler.Closure:
+	if ok := callee.IsNative(); ok {
+		return vm.callValue(callee, argCount)
+	}
+	if f, ok := callee.AsClosure(); ok {
 		if err := vm.checkArgs(f, argCount); err != nil {
 			return err
 		}
 		vm.tailCallClosure(f, argCount)
 		return nil
-	default:
-		return vm.runtimeError("Attempting to call %v", f)
 	}
+	return vm.runtimeError("Attempting to call %v", callee)
 }
 
 func (vm *VM) callClosure(closure *compiler.Closure, argCount int) error {
@@ -201,12 +199,14 @@ func readConstant(frame *Frame) compiler.Value {
 	return frame.closure.Function.Chunk.Constants[idx]
 }
 
-func readAtom(frame *Frame) compiler.Atom {
-	return readConstant(frame).(compiler.Atom)
+func readAtom(frame *Frame) string {
+	atom, _ := readConstant(frame).AsAtom()
+	return atom
 }
 
 func readFunction(frame *Frame) *compiler.Function {
-	return readConstant(frame).(*compiler.Function)
+	f, _ := readConstant(frame).AsFunction()
+	return f
 }
 
 func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
@@ -225,13 +225,13 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
 			if err := vm.callValue(callee, argCount); err != nil {
-				return nil, err
+				return compiler.Null, err
 			}
 		case compiler.OpTailCall:
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
 			if err := vm.tailCallValue(callee, argCount); err != nil {
-				return nil, err
+				return compiler.Null, err
 			}
 		case compiler.OpReturn:
 			result := vm.pop()
@@ -270,7 +270,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			name := readAtom(frame)
 			value, ok := vm.globals[name]
 			if !ok {
-				return nil, vm.runtimeError("Undefined variable: %s", name)
+				return compiler.Null, vm.runtimeError("Undefined variable: %s", name)
 			}
 			vm.push(value)
 		case compiler.OpDefineGlobal:
@@ -279,7 +279,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 		case compiler.OpSetGlobal:
 			name := readAtom(frame)
 			if _, ok := vm.globals[name]; !ok {
-				return nil, vm.runtimeError("Attempting to set an undefined variable: %s", name)
+				return compiler.Null, vm.runtimeError("Attempting to set an undefined variable: %s", name)
 			}
 			vm.globals[name] = vm.pop()
 			vm.push(compiler.Null)
@@ -296,7 +296,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 					closure.Upvalues[i] = frame.closure.Upvalues[uv.Index]
 				}
 			}
-			vm.push(closure)
+			vm.push(compiler.MakeClosure(closure))
 		case compiler.OpPop:
 			vm.pop()
 		case compiler.OpJump:
@@ -313,7 +313,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 				frame.ip += offset
 			}
 		default:
-			return nil, vm.runtimeError("Unknown opcode: %v", opcode)
+			return compiler.Null, vm.runtimeError("Unknown opcode: %v", opcode)
 		}
 	}
 }
