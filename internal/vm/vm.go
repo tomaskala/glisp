@@ -56,7 +56,7 @@ func (vm *VM) pop2() (compiler.Value, compiler.Value) {
 
 func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
 	if vm.numFrames == framesMax {
-		return vm.runtimeError("Stack overflow")
+		return vm.runtimeError("stack overflow")
 	}
 	vm.frames[vm.numFrames] = Frame{closure: closure, base: base}
 	vm.numFrames++
@@ -115,10 +115,10 @@ func (vm *VM) closeUpvalues(last int) {
 func (vm *VM) checkArgs(closure *compiler.Closure, argCount int) error {
 	function := closure.Function
 	if !function.HasRestParam && argCount != function.Arity {
-		return vm.runtimeError("Function %s expects %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
+		return vm.runtimeError("%s expects %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
 	}
 	if function.HasRestParam && argCount < function.Arity {
-		return vm.runtimeError("Function %s expects at least %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
+		return vm.runtimeError("%s expects at least %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
 	}
 	return nil
 }
@@ -203,7 +203,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			callee := vm.peek(argCount)
 			closure, ok := callee.AsClosure()
 			if !ok {
-				return compiler.Nil, vm.runtimeError("Attempting to call %v", callee)
+				return compiler.Nil, vm.runtimeError("attempting to call %v", callee)
 			}
 			if err := vm.checkArgs(closure, argCount); err != nil {
 				return compiler.Nil, err
@@ -216,7 +216,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			callee := vm.peek(argCount)
 			closure, ok := callee.AsClosure()
 			if !ok {
-				return compiler.Nil, vm.runtimeError("Attempting to call %v", callee)
+				return compiler.Nil, vm.runtimeError("attempting to call %v", callee)
 			}
 			if err := vm.checkArgs(closure, argCount); err != nil {
 				return compiler.Nil, err
@@ -265,7 +265,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			atom := readAtom(frame)
 			value, ok := vm.globals[atom]
 			if !ok {
-				return compiler.Nil, vm.runtimeError("Undefined variable: %s", atom.Value())
+				return compiler.Nil, vm.runtimeError("undefined variable: %s", atom.Value())
 			}
 			vm.push(value)
 		case compiler.OpDefineGlobal:
@@ -274,7 +274,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 		case compiler.OpSetGlobal:
 			atom := readAtom(frame)
 			if _, ok := vm.globals[atom]; !ok {
-				return compiler.Nil, vm.runtimeError("Attempting to set an undefined variable: %s", atom.Value())
+				return compiler.Nil, vm.runtimeError("attempting to set an undefined variable: %s", atom.Value())
 			}
 			vm.globals[atom] = vm.pop()
 			vm.push(compiler.Nil)
@@ -308,7 +308,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 				frame.ip += offset
 			}
 		default:
-			return compiler.Nil, vm.runtimeError("Unknown opcode: %v", opcode)
+			return compiler.Nil, vm.runtimeError("unknown opcode: %v", opcode)
 		}
 	}
 }

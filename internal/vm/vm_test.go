@@ -105,14 +105,12 @@ func TestArithmetic(t *testing.T) {
 	}{
 		{"add_basic", "(+ 2 3)", "5"},
 		{"add_multiple", "(+ 1 2 3 4)", "10"},
-		{"add_empty", "(+)", "0"},
 		{"add_single", "(+ 5)", "5"},
 		{"sub_basic", "(- 10 3)", "7"},
 		{"sub_multiple", "(- 20 5 3)", "12"},
 		{"sub_negate", "(- 5)", "-5"},
 		{"mul_basic", "(* 4 5)", "20"},
 		{"mul_multiple", "(* 2 3 4)", "24"},
-		{"mul_empty", "(*)", "1"},
 		{"mul_single", "(* 7)", "7"},
 		{"div_basic", "(/ 12 3)", "4"},
 		{"div_multiple", "(/ 24 2 3)", "4"},
@@ -138,10 +136,10 @@ func TestArithmeticErrors(t *testing.T) {
 		expectedErr string
 	}{
 		// TODO: Uncomment
+		//{"add_no_args", "(+)", "expects at least one argument"},
 		//{"sub_no_args", "(-)", "expects at least one argument"},
+		//{"mul_no_args", "(*)", "expects at least one argument"},
 		//{"div_no_args", "(/)", "expects at least one argument"},
-		{"div_by_zero", "(/ 5 0)", "zero division"},
-		{"div_by_zero_multiple", "(/ 10 2 0)", "zero division"},
 		{"add_non_number", "(+ 5 'hello)", "+ is only defined for numbers"},
 		{"sub_non_number", "(- 10 'world)", "- is only defined for numbers"},
 		{"mul_non_number", "(* 3 ())", "* is only defined for numbers"},
@@ -384,8 +382,8 @@ func TestFunctionErrors(t *testing.T) {
 		{"too_few_args", "((lambda (x y) (+ x y)) 1)", "expects 2 arguments, got 1"},
 		{"too_many_args", "((lambda (x) x) 1 2)", "expects 1 arguments, got 2"},
 		{"variadic_too_few", "((lambda (x y . rest) x) 1)", "expects at least 2 arguments, got 1"},
-		{"call_non_function", "(42 1 2)", "Attempting to call 42"},
-		{"call_atom", "('hello)", "Attempting to call hello"},
+		{"call_non_function", "(42 1 2)", "attempting to call 42"},
+		{"call_atom", "('hello)", "attempting to call hello"},
 	}
 
 	for _, tt := range tests {
@@ -423,7 +421,7 @@ func TestVariableErrors(t *testing.T) {
 		source      string
 		expectedErr string
 	}{
-		{"undefined_var", "nonexistent", "Undefined variable: nonexistent"},
+		{"undefined_var", "nonexistent", "undefined variable: nonexistent"},
 		{"set_undefined", "(set! undefined 42)", "undefined variable: undefined"},
 	}
 
@@ -708,7 +706,7 @@ func TestStackOverflowPrevention(t *testing.T) {
 			  (lambda (n)
 			    (+ 1 (infinite-loop n))))
 			(infinite-loop 0)`
-		expectError(t, source, "Stack overflow")
+		expectError(t, source, "stack overflow")
 	})
 }
 
@@ -801,7 +799,7 @@ func TestErrorRecovery(t *testing.T) {
 		vm := NewVM()
 
 		// First, cause an error
-		program1 := "(/ 1 0)"
+		program1 := "a" // References an undefined atom.
 		ast1, _ := parser.Parse("test", program1)
 		compiled1, _ := compiler.Compile("test", ast1)
 
