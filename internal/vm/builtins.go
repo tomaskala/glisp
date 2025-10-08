@@ -125,19 +125,19 @@ func (vm *VM) callBuiltin(builtin compiler.Builtin, argCount int) error {
 // varNumOp applies the given binary operation as a reducer
 // while assuming that at least one argument was provided.
 func (vm *VM) varNumOp(argCount int, op func(float64, float64) float64) bool {
-	base := len(vm.stack) - argCount
+	base := vm.stackTop - argCount
 	result, ok := vm.stack[base].AsNumber()
 	if !ok {
 		return false
 	}
-	for _, arg := range vm.stack[base+1:] {
-		num, ok := arg.AsNumber()
+	for i := base + 1; i < vm.stackTop; i++ {
+		num, ok := vm.stack[i].AsNumber()
 		if !ok {
 			return false
 		}
 		result = op(result, num)
 	}
-	vm.stack = vm.stack[:base]
+	vm.stackTop = base
 	vm.pushNumber(result)
 	return true
 }

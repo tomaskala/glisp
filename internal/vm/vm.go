@@ -9,7 +9,10 @@ import (
 	"tomaskala.com/glisp/internal/compiler"
 )
 
-const framesMax = 1024
+const (
+	framesMax = 1024
+	stackInit = 8192
+)
 
 type RuntimeError struct {
 	Message string
@@ -26,32 +29,46 @@ type Frame struct {
 }
 
 type VM struct {
-	numFrames    int
-	frames       [framesMax]Frame
-	stack        []compiler.Value
+	numFrames int
+	frames    [framesMax]Frame
+
+	stackTop int
+	stack    []compiler.Value
+
 	openUpvalues []*compiler.Upvalue
-	globals      map[compiler.Atom]compiler.Value
+
+	globals map[compiler.Atom]compiler.Value
 }
 
 func NewVM() *VM {
 	globals := map[compiler.Atom]compiler.Value{
 		compiler.NewAtom("#t"): compiler.True,
 	}
-	return &VM{globals: globals}
+	return &VM{stack: make([]compiler.Value, 0, stackInit), globals: globals}
 }
 
-func (vm *VM) push(v compiler.Value)        { vm.stack = append(vm.stack, v) }
-func (vm *VM) peek(dist int) compiler.Value { return vm.stack[len(vm.stack)-1-dist] }
-func (vm *VM) pop() compiler.Value {
-	v := vm.stack[len(vm.stack)-1]
-	vm.stack = vm.stack[:len(vm.stack)-1]
-	return v
+func (vm *VM) push(v compiler.Value) {
+	stackTop := vm.stackTop
+	if stackTop >= len(vm.stack) {
+		vm.stack = append(vm.stack, compiler.Nil)
+	}
+	vm.stack[stackTop] = v
+	stackTop++
+	vm.stackTop = stackTop
 }
+
+func (vm *VM) peek(dist int) compiler.Value {
+	return vm.stack[vm.stackTop-1-dist]
+}
+
+func (vm *VM) pop() compiler.Value {
+	vm.stackTop--
+	return vm.stack[vm.stackTop]
+}
+
 func (vm *VM) pop2() (compiler.Value, compiler.Value) {
-	v1 := vm.stack[len(vm.stack)-1]
-	v2 := vm.stack[len(vm.stack)-2]
-	vm.stack = vm.stack[:len(vm.stack)-2]
-	return v1, v2
+	vm.stackTop -= 2
+	return vm.stack[vm.stackTop+1], vm.stack[vm.stackTop]
 }
 
 func (vm *VM) pushFrame(closure *compiler.Closure, base int) error {
@@ -82,7 +99,7 @@ func (vm *VM) runtimeError(format string, args ...any) error {
 		builder.WriteString(")\n")
 	}
 	vm.numFrames = 0
-	vm.stack = vm.stack[:0]
+	vm.stackTop = 0
 	vm.openUpvalues = vm.openUpvalues[:0]
 	return &RuntimeError{builder.String()}
 }
@@ -125,14 +142,14 @@ func (vm *VM) checkArgs(closure *compiler.Closure, argCount int) error {
 
 func (vm *VM) callClosure(closure *compiler.Closure, argCount int) error {
 	function := closure.Function
-	base := len(vm.stack) - argCount
+	base := vm.stackTop - argCount
 	if function.HasRestParam {
 		var restArgs compiler.Value = compiler.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
 			arg := vm.stack[base+i]
 			restArgs = compiler.Cons(arg, restArgs)
 		}
-		vm.stack = vm.stack[:base+function.Arity]
+		vm.stackTop = base + function.Arity
 		vm.push(restArgs)
 	}
 	return vm.pushFrame(closure, base)
@@ -143,24 +160,24 @@ func (vm *VM) tailCallClosure(closure *compiler.Closure, argCount int) {
 	currentFrame := vm.peekFrame()
 	newArgCount := argCount
 	if function.HasRestParam {
-		base := len(vm.stack) - argCount
+		base := vm.stackTop - argCount
 		var restArgs compiler.Value = compiler.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
 			arg := vm.stack[base+i]
 			restArgs = compiler.Cons(arg, restArgs)
 		}
-		vm.stack = vm.stack[:base+function.Arity]
+		vm.stackTop = base + function.Arity
 		vm.push(restArgs)
 		newArgCount = function.Arity + 1
 	}
 	vm.closeUpvalues(currentFrame.base)
 	newBase := currentFrame.base
-	oldStackTop := len(vm.stack)
+	oldStackTop := vm.stackTop
 	newArgsStart := oldStackTop - newArgCount
 	for i := 0; i < newArgCount; i++ {
 		vm.stack[newBase+i] = vm.stack[newArgsStart+i]
 	}
-	vm.stack = vm.stack[:newBase+newArgCount]
+	vm.stackTop = newBase + newArgCount
 	currentFrame.closure = closure
 	currentFrame.ip = 0
 }
@@ -235,7 +252,7 @@ func (vm *VM) Run(program *compiler.Program) (compiler.Value, error) {
 			if vm.numFrames == 0 {
 				return result, nil
 			}
-			vm.stack = vm.stack[:frame.base-1]
+			vm.stackTop = frame.base - 1
 			vm.push(result)
 		case compiler.OpGetLocal:
 			slot := int(readOpCode(frame))

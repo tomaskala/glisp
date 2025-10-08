@@ -28,7 +28,7 @@ func evalExpr(t *testing.T, source string) compiler.Value {
 	}
 
 	// Assert VM state is clean after evaluation
-	if len(vm.stack) != 0 {
+	if vm.stackTop != 0 {
 		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(vm.stack))
 	}
 	if vm.numFrames != 0 {
@@ -809,7 +809,7 @@ func TestErrorRecovery(t *testing.T) {
 		}
 
 		// VM should be reset and ready for next program
-		if len(vm.stack) != 0 {
+		if vm.stackTop != 0 {
 			t.Errorf("VM stack not reset after error: %d items", len(vm.stack))
 		}
 		if vm.numFrames != 0 {
