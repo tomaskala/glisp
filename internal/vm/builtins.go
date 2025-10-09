@@ -18,8 +18,6 @@ func (vm *VM) pushNumber(n float64) {
 	vm.push(compiler.MakeNumber(n))
 }
 
-// TODO: Check arity - might have to emit the builtin's arity as an opcode.
-// TODO: Don't forget that +, -, *, / require at least one arg.
 func (vm *VM) callBuiltin(builtin compiler.Builtin, argCount int) error {
 	switch builtin {
 	case compiler.BuiltinCons:

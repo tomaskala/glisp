@@ -95,7 +95,7 @@ func (c *Compiler) beginScope() {
 // TODO: Use errorf here?
 func opcodeInt(n int) OpCode {
 	if n < OpCodeMin || OpCodeMax < n {
-		panic(&CompileError{fmt.Sprintf("Program too large: constant/local index or a jump offset %d is out of bounds", n)})
+		panic(&CompileError{fmt.Sprintf("program too large: constant/local index or a jump offset %d is out of bounds", n)})
 	}
 	return OpCode(n)
 }
@@ -179,7 +179,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 		c.emit2(OpDefineGlobal, opcodeInt(idx), n.Token())
 		c.emit2(OpConstant, opcodeInt(idx), n.Token())
 	case *ast.Let:
-		panic(c.errorf("Unexpanded let expression"))
+		panic(c.errorf("unexpanded let expression"))
 	case *ast.If:
 		c.compileIf(n, tailPosition)
 	case *ast.Cond:
@@ -193,7 +193,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Begin:
 		c.compileBegin(n, tailPosition)
 	default:
-		panic(c.errorf("Unrecognized expression type: %v", node))
+		panic(c.errorf("unrecognized expression type: %v", node))
 	}
 }
 
@@ -252,7 +252,7 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 	case *ast.Define:
 		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Nil)))
 	case *ast.Let:
-		panic(c.errorf("Unexpanded let expression"))
+		panic(c.errorf("unexpanded let expression"))
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
@@ -288,37 +288,45 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 		}
 		return Cons(MakeAtom("begin"), exprs)
 	default:
-		panic(c.errorf("Unexpected quoted expression type: %v", node))
+		panic(c.errorf("unexpected quoted expression type: %v", node))
 	}
 }
 
-var builtins map[string]Builtin = map[string]Builtin{
-	"cons":     BuiltinCons,
-	"car":      BuiltinCar,
-	"cdr":      BuiltinCdr,
-	"+":        BuiltinAdd,
-	"-":        BuiltinSub,
-	"*":        BuiltinMul,
-	"/":        BuiltinDiv,
-	"=":        BuiltinNumEq,
-	"<":        BuiltinNumLt,
-	"<=":       BuiltinNumLte,
-	">":        BuiltinNumGt,
-	">=":       BuiltinNumGte,
-	"eq?":      BuiltinEq,
-	"atom?":    BuiltinIsAtom,
-	"nil?":     BuiltinIsNil,
-	"pair?":    BuiltinIsPair,
-	"not":      BuiltinIsNil,
-	"set-car!": BuiltinSetCar,
-	"set-cdr!": BuiltinSetCdr,
-	"display":  BuiltinDisplay,
-	"newline":  BuiltinNewline,
+type builtinFunc struct {
+	name  string
+	kind  Builtin
+	arity int
+}
+
+var builtins map[string]builtinFunc = map[string]builtinFunc{
+	"cons":     {"cons", BuiltinCons, 2},
+	"car":      {"car", BuiltinCar, 1},
+	"cdr":      {"cdr", BuiltinCdr, 1},
+	"+":        {"+", BuiltinAdd, -1},
+	"-":        {"-", BuiltinSub, -1},
+	"*":        {"*", BuiltinMul, -1},
+	"/":        {"/", BuiltinDiv, -1},
+	"=":        {"=", BuiltinNumEq, 2},
+	"<":        {"<", BuiltinNumLt, 2},
+	"<=":       {"<=", BuiltinNumLte, 2},
+	">":        {">", BuiltinNumGt, 2},
+	">=":       {">=", BuiltinNumGte, 2},
+	"eq?":      {"eq?", BuiltinEq, 2},
+	"atom?":    {"atom?", BuiltinIsAtom, 1},
+	"nil?":     {"nil?", BuiltinIsNil, 1},
+	"pair?":    {"pair?", BuiltinIsPair, 1},
+	"not":      {"not", BuiltinIsNil, 1},
+	"set-car!": {"set-car!", BuiltinSetCar, 2},
+	"set-cdr!": {"set-cdr!", BuiltinSetCdr, 2},
+	"display":  {"display", BuiltinDisplay, 1},
+	"newline":  {"newline", BuiltinNewline, 0},
 }
 
 func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 	builtin, builtinFound := getBuiltin(call)
-	if !builtinFound {
+	if builtinFound {
+		c.checkArgs(builtin.name, builtin.arity, len(call.Args))
+	} else {
 		c.compileExpr(call.Func, false)
 	}
 	for _, a := range call.Args {
@@ -326,7 +334,7 @@ func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 	}
 	if builtinFound {
 		c.emit1(OpCallBuiltin, call.Token())
-		c.emit2(OpCode(builtin), opcodeInt(len(call.Args)), call.Token())
+		c.emit2(OpCode(builtin.kind), opcodeInt(len(call.Args)), call.Token())
 	} else if tailPosition {
 		c.emit2(OpTailCall, opcodeInt(len(call.Args)), call.Token())
 	} else {
@@ -334,10 +342,19 @@ func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 	}
 }
 
-func getBuiltin(call *ast.Call) (Builtin, bool) {
+func (c *Compiler) checkArgs(name string, arity, argCount int) {
+	if arity >= 0 && arity != argCount {
+		panic(c.errorf("%s expects %d arguments, got %d", name, arity, argCount))
+	}
+	if arity == -1 && argCount == 0 {
+		panic(c.errorf("%s expects at least 1 argument", name))
+	}
+}
+
+func getBuiltin(call *ast.Call) (builtinFunc, bool) {
 	atom, ok := call.Func.(*ast.Atom)
 	if !ok {
-		return Builtin(0), false
+		return builtinFunc{}, false
 	}
 	builtin, ok := builtins[atom.Name]
 	return builtin, ok

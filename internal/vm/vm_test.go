@@ -135,11 +135,10 @@ func TestArithmeticErrors(t *testing.T) {
 		source      string
 		expectedErr string
 	}{
-		// TODO: Uncomment
-		//{"add_no_args", "(+)", "expects at least one argument"},
-		//{"sub_no_args", "(-)", "expects at least one argument"},
-		//{"mul_no_args", "(*)", "expects at least one argument"},
-		//{"div_no_args", "(/)", "expects at least one argument"},
+		{"add_no_args", "(+)", "+ expects at least 1 argument"},
+		{"sub_no_args", "(-)", "- expects at least 1 argument"},
+		{"mul_no_args", "(*)", "* expects at least 1 argument"},
+		{"div_no_args", "(/)", "/ expects at least 1 argument"},
 		{"add_non_number", "(+ 5 'hello)", "+ is only defined for numbers"},
 		{"sub_non_number", "(- 10 'world)", "- is only defined for numbers"},
 		{"mul_non_number", "(* 3 ())", "* is only defined for numbers"},
