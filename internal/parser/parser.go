@@ -3,7 +3,6 @@ package parser
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"tomaskala.com/glisp/internal/ast"
 	"tomaskala.com/glisp/internal/tokenizer"
@@ -52,7 +51,7 @@ func (p *Parser) errorf(format string, args ...any) error {
 
 func (p *Parser) expect(expected tokenizer.TokenType) {
 	if p.tok.Type != expected {
-		panic(p.errorf("Unexpected token: expected %v, got %v", expected, p.tok.Type))
+		panic(p.errorf("unexpected token: expected %v, got %v", expected, p.tok.Type))
 	}
 }
 
@@ -91,7 +90,7 @@ func (p *Parser) parseExpr() ast.Node {
 	case tokenizer.TokenAtom:
 		return &ast.Atom{Name: tok.Val, Tok: tok}
 	default:
-		panic(p.errorf("Unexpected token: expected expression, got %v", p.tok.Type))
+		panic(p.errorf("unexpected token: expected expression, got %v", p.tok.Type))
 	}
 }
 
@@ -224,7 +223,7 @@ func (p *Parser) parseLambda(tok tokenizer.Token) ast.Node {
 	case tokenizer.TokenAtom:
 		dotParam = p.tok.Val
 	default:
-		panic(p.errorf("Unexpected lambda parameter: %v", p.tok.Type))
+		panic(p.errorf("unexpected lambda parameter: %v", p.tok.Type))
 	}
 	p.next()
 	body := p.parseExpr()
@@ -376,65 +375,12 @@ func (p *Parser) parseQuote(tok tokenizer.Token) ast.Node {
 // Number:
 //
 // number literal
-//
-// Logic taken from https://cs.opensource.google/go/go/+/master:src/text/template/parse/node.go.
 func (p *Parser) parseNumber(tok tokenizer.Token) ast.Node {
-	isUint := false
-	isInt := false
-	isFloat := false
-	var uintVal uint64
-	var intVal int64
-	var floatVal float64
-	u, err := strconv.ParseUint(p.tok.Val, 0, 64) // will fail for -0; fixed below.
-	if err == nil {
-		isUint = true
-		uintVal = u
+	if num, err := strconv.ParseInt(tok.Val, 0, 0); err == nil {
+		return &ast.Number{Value: float64(num), Tok: tok}
 	}
-	i, err := strconv.ParseInt(p.tok.Val, 0, 64)
-	if err == nil {
-		isInt = true
-		intVal = i
-		if i == 0 {
-			isUint = true // in case of -0.
-			uintVal = u
-		}
+	if num, err := strconv.ParseFloat(tok.Val, 64); err == nil {
+		return &ast.Number{Value: num, Tok: tok}
 	}
-	// If an integer extraction succeeded, promote the float.
-	if isInt {
-		isFloat = true
-		floatVal = float64(intVal)
-	} else if isUint {
-		isFloat = true
-		floatVal = float64(uintVal)
-	} else {
-		f, err := strconv.ParseFloat(p.tok.Val, 64)
-		if err == nil {
-			// If we parsed it as a float but it looks like an integer,
-			// it's a huge number too large to fit in an int. Reject it.
-			if !strings.ContainsAny(p.tok.Val, ".eEpP") {
-				panic(p.errorf("Integer overflow"))
-			}
-			isFloat = true
-			floatVal = f
-			// If a floating-point extraction succeeded, extract the int if needed.
-			if !isInt && float64(int64(f)) == f {
-				isInt = true
-				intVal = int64(f)
-			}
-			if !isUint && float64(uint64(f)) == f {
-				isUint = true
-				uintVal = uint64(f)
-			}
-		}
-	}
-	if isInt {
-		return &ast.Number{Value: float64(intVal), Tok: tok}
-	}
-	if isUint {
-		return &ast.Number{Value: float64(uintVal), Tok: tok}
-	}
-	if isFloat {
-		return &ast.Number{Value: floatVal, Tok: tok}
-	}
-	panic(p.errorf("Illegal number syntax"))
+	panic(p.errorf("illegal number syntax"))
 }

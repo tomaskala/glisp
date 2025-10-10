@@ -502,102 +502,97 @@ var errorTests = map[string]struct {
 }{
 	"unmatched paren": {
 		source:       "(+ 1 2",
-		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedMsg:  "unexpected token: expected expression, got TokenEOF",
 		expectedLine: 1,
 	},
 	"incomplete define": {
 		source:       "(define x)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"incomplete lambda": {
 		source:       "(lambda (x))",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"incomplete let": {
 		source:       "(let ((x 1)))",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"malformed let": {
 		source:       "(let (x 1) x)",
-		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenAtom",
+		expectedMsg:  "unexpected token: expected TokenLeftParen, got TokenAtom",
 		expectedLine: 1,
 	},
 	"malformed binding": {
 		source:       "(let ((x)) x)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"incomplete quote": {
 		source:       "'",
-		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedMsg:  "unexpected token: expected expression, got TokenEOF",
 		expectedLine: 1,
 	},
 	"bad lambda params": {
 		source:       "(lambda 123 x)",
-		expectedMsg:  "Unexpected lambda parameter: TokenNumber",
+		expectedMsg:  "unexpected lambda parameter: TokenNumber",
 		expectedLine: 1,
 	},
 	"unterminated quote": {
 		source:       "(quote",
-		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedMsg:  "unexpected token: expected expression, got TokenEOF",
 		expectedLine: 1,
 	},
 	"empty define": {
 		source:       "(define)",
-		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected TokenAtom, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"define with number": {
 		source:       "(define 123 x)",
-		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenNumber",
+		expectedMsg:  "unexpected token: expected TokenAtom, got TokenNumber",
 		expectedLine: 1,
 	},
 	"let missing bindings": {
 		source:       "(let)",
-		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected TokenLeftParen, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"let unclosed bindings": {
 		source:       "(let ((x 1)",
-		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenEOF",
+		expectedMsg:  "unexpected token: expected TokenLeftParen, got TokenEOF",
 		expectedLine: 1,
 	},
 	"lambda missing params": {
 		source:       "(lambda)",
-		expectedMsg:  "Unexpected lambda parameter: TokenRightParen",
+		expectedMsg:  "unexpected lambda parameter: TokenRightParen",
 		expectedLine: 1,
 	},
 	"dot without rest param": {
 		source:       "(lambda (x .) body)",
-		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected TokenAtom, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"multiple dots": {
 		source:       "(lambda (x . y . z) body)",
-		expectedMsg:  "Unexpected token: expected TokenRightParen, got TokenDot",
+		expectedMsg:  "unexpected token: expected TokenRightParen, got TokenDot",
 		expectedLine: 1,
 	},
 	"invalid token": {
 		source:       "(",
-		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedMsg:  "unexpected token: expected expression, got TokenEOF",
 		expectedLine: 1,
 	},
 	"nested unmatched": {
 		source:       "(+ (- 3",
-		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedMsg:  "unexpected token: expected expression, got TokenEOF",
 		expectedLine: 1,
 	},
 	"quote missing expr": {
 		source:       "(quote)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
-		expectedLine: 1,
-	},
-	"number overflow": {
-		source:       "999999999999999999999999999999999999999999999999999999999999999999",
-		expectedMsg:  "Integer overflow",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"invalid number": {
@@ -607,27 +602,27 @@ var errorTests = map[string]struct {
 	},
 	"incomplete if": {
 		source:       "(if #t)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"if missing else": {
 		source:       "(if #t 1)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"malformed cond clause": {
 		source:       "(cond (a))",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"incomplete set": {
 		source:       "(set! x)",
-		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedMsg:  "unexpected token: expected expression, got TokenRightParen",
 		expectedLine: 1,
 	},
 	"set with number": {
 		source:       "(set! 123 value)",
-		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenNumber",
+		expectedMsg:  "unexpected token: expected TokenAtom, got TokenNumber",
 		expectedLine: 1,
 	},
 	"empty begin": {
@@ -1035,14 +1030,14 @@ func TestLineNumbers(t *testing.T) {
 			source: "42\n(",
 			expectedErr: &ParseError{
 				Line:    2,
-				Message: "Unexpected token: expected expression, got TokenEOF",
+				Message: "unexpected token: expected expression, got TokenEOF",
 			},
 		},
 		"error on line 3 column 5": {
 			source: "42\n(+ 1\n    (",
 			expectedErr: &ParseError{
 				Line:    3,
-				Message: "Unexpected token: expected expression, got TokenEOF",
+				Message: "unexpected token: expected expression, got TokenEOF",
 			},
 		},
 	}
