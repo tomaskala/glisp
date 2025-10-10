@@ -125,7 +125,12 @@ func (vm *VM) checkArgs(closure *runtime.Closure, argCount int) error {
 		return vm.runtimeError("%s expects %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
 	}
 	if function.HasRestParam && argCount < function.Arity {
-		return vm.runtimeError("%s expects at least %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
+		return vm.runtimeError(
+			"%s expects at least %d arguments, got %d",
+			function.Name.Value(),
+			function.Arity,
+			argCount,
+		)
 	}
 	return nil
 }
@@ -163,7 +168,7 @@ func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 	function := closure.Function
 	base := vm.stackTop - argCount
 	if function.HasRestParam {
-		var restArgs runtime.Value = runtime.Nil
+		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
 			arg := vm.stack[base+i]
 			restArgs = runtime.Cons(arg, restArgs)
@@ -194,7 +199,7 @@ func (vm *VM) tailCallClosure(closure *runtime.Closure, argCount int) {
 	newArgCount := argCount
 	if function.HasRestParam {
 		base := vm.stackTop - argCount
-		var restArgs runtime.Value = runtime.Nil
+		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
 			arg := vm.stack[base+i]
 			restArgs = runtime.Cons(arg, restArgs)
@@ -207,7 +212,7 @@ func (vm *VM) tailCallClosure(closure *runtime.Closure, argCount int) {
 	newBase := currentFrame.base
 	oldStackTop := vm.stackTop
 	newArgsStart := oldStackTop - newArgCount
-	for i := 0; i < newArgCount; i++ {
+	for i := range newArgCount {
 		vm.stack[newBase+i] = vm.stack[newArgsStart+i]
 	}
 	vm.stackTop = newBase + newArgCount
@@ -237,8 +242,7 @@ func readFunction(frame *Frame) *runtime.Function {
 }
 
 func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
-	closure := &runtime.Closure{Function: program.Function}
-	vm.pushFrame(closure, 0)
+	vm.pushFrame(&runtime.Closure{Function: program.Function}, 0)
 	for {
 		frame := vm.peekFrame()
 		opcode := readOpCode(frame)

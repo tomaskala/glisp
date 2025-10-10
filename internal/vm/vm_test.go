@@ -548,7 +548,11 @@ func TestLet(t *testing.T) {
 		{"let_star_sequential", "(let* ((x 1) (y (+ x 1))) (+ x y))", "3"},
 		{"let_star_empty", "(let* () 'empty)", "empty"},
 		{"letrec_recursive", "(letrec ((fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))) (fact 5))", "120"},
-		{"letrec_mutual", "(letrec ((even? (lambda (n) (if (= n 0) #t (odd? (- n 1))))) (odd? (lambda (n) (if (= n 0) () (even? (- n 1)))))) (even? 4))", "#t"},
+		{
+			"letrec_mutual",
+			"(letrec ((even? (lambda (n) (if (= n 0) #t (odd? (- n 1))))) (odd? (lambda (n) (if (= n 0) () (even? (- n 1)))))) (even? 4))",
+			"#t",
+		},
 	}
 
 	for _, tt := range tests {

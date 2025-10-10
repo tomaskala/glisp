@@ -193,7 +193,7 @@ func builtinDisplay(args []Value) (Value, error) {
 	return Nil, nil
 }
 
-func builtinNewline(args []Value) (Value, error) {
+func builtinNewline([]Value) (Value, error) {
 	fmt.Println()
 	return Nil, nil
 }

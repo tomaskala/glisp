@@ -39,7 +39,7 @@ func (v *expander) Visit(node ast.Node) (ast.Node, bool) {
 // is equivalent to the following lambda invocation:
 //
 //	((lambda (k1 k2 ... kN) body) v1 v2 ... vN)
-func transformLet(let *ast.Let) ast.Node {
+func transformLet(let *ast.Let) *ast.Call {
 	params := make([]string, len(let.Bindings))
 	args := make([]ast.Node, len(let.Bindings))
 	for i, binding := range let.Bindings {
@@ -63,7 +63,7 @@ func transformLet(let *ast.Let) ast.Node {
 //
 //	((lambda (k1) ((lambda (k2) ... ((lambda (kN) body) vN) ... v2) v1))
 func transformLetStar(let *ast.Let) ast.Node {
-	var node ast.Node = let.Body
+	node := let.Body
 	for _, binding := range slices.Backward(let.Bindings) {
 		function := &ast.Function{
 			Name:   "let*",
@@ -93,7 +93,7 @@ func transformLetStar(let *ast.Let) ast.Node {
 //	    ...
 //	    (set! kN vN)
 //	    body)) () () ... ())
-func transformLetRec(let *ast.Let) ast.Node {
+func transformLetRec(let *ast.Let) *ast.Call {
 	params := make([]string, len(let.Bindings))
 	args := make([]ast.Node, len(let.Bindings))
 	setExprs := make([]ast.Node, len(let.Bindings))

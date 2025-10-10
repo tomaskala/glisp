@@ -92,9 +92,8 @@ func (c *Compiler) addConstant(constant runtime.Value) int {
 	return c.function.Chunk.AddConstant(constant)
 }
 
-func (c *Compiler) addLocal(name string) int {
+func (c *Compiler) addLocal(name string) {
 	c.locals = append(c.locals, Local(name))
-	return len(c.locals) - 1
 }
 
 func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
@@ -215,13 +214,13 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 	case *ast.Quote:
 		return c.compileQuoted(n.Value)
 	case *ast.Call:
-		var cons runtime.Value = runtime.Nil
+		cons := runtime.Nil
 		for _, arg := range slices.Backward(n.Args) {
 			cons = runtime.Cons(c.compileQuoted(arg), cons)
 		}
 		return runtime.Cons(c.compileQuoted(n.Func), cons)
 	case *ast.Function:
-		var params runtime.Value = runtime.Nil
+		params := runtime.Nil
 		if n.RestParam != "" {
 			params = runtime.MakeAtom(n.RestParam)
 		}
@@ -239,7 +238,7 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 		elseBranch := c.compileQuoted(n.Else)
 		return runtime.Cons(runtime.MakeAtom("if"), runtime.Cons(cond, runtime.Cons(thenBranch, runtime.Cons(elseBranch, runtime.Nil))))
 	case *ast.Cond:
-		var clauses runtime.Value = runtime.Nil
+		clauses := runtime.Nil
 		for _, cl := range slices.Backward(n.Clauses) {
 			cond := c.compileQuoted(cl.Cond)
 			value := c.compileQuoted(cl.Value)
@@ -248,13 +247,13 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 		}
 		return runtime.Cons(runtime.MakeAtom("cond"), clauses)
 	case *ast.And:
-		var exprs runtime.Value = runtime.Nil
+		exprs := runtime.Nil
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
 		return runtime.Cons(runtime.MakeAtom("and"), exprs)
 	case *ast.Or:
-		var exprs runtime.Value = runtime.Nil
+		exprs := runtime.Nil
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
@@ -262,7 +261,7 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 	case *ast.Set:
 		return runtime.Cons(runtime.MakeAtom("set!"), runtime.Cons(runtime.MakeAtom(n.Variable), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
 	case *ast.Begin:
-		var exprs runtime.Value = runtime.Cons(c.compileQuoted(n.Tail), runtime.Nil)
+		exprs := runtime.Cons(c.compileQuoted(n.Tail), runtime.Nil)
 		for _, expr := range slices.Backward(n.Exprs) {
 			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
@@ -316,14 +315,14 @@ func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
 		c.emit1(runtime.OpNil, ast.Token(cond))
 		return
 	}
-	var endJumps []int
-	for _, clause := range cond.Clauses {
+	endJumps := make([]int, len(cond.Clauses))
+	for i, clause := range cond.Clauses {
 		c.compileExpr(clause.Cond, false)
 		nextJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(clause.Cond))
 		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
 		c.compileExpr(clause.Value, tailPosition)
 		endJump := c.emitJump(runtime.OpJump, ast.Token(clause.Value))
-		endJumps = append(endJumps, endJump)
+		endJumps[i] = endJump
 		c.patchJump(nextJump)
 		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
 	}

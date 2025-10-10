@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// Helper function to tokenize entire input and return all tokens
+// Helper function to tokenize entire input and return all tokens.
 func tokenizeAll(source string) []Token {
 	tokenizer := NewTokenizer(source)
 	var tokens []Token
@@ -21,7 +21,7 @@ func tokenizeAll(source string) []Token {
 	return tokens
 }
 
-// Basic token tests
+// Basic token tests.
 var basicTokenTests = map[string]struct {
 	source string
 	token  Token
@@ -56,7 +56,7 @@ var basicTokenTests = map[string]struct {
 	"negative float": {"-2.718", Token{TokenNumber, 1, "-2.718"}},
 }
 
-// Number format tests - comprehensive coverage of all number formats
+// Number format tests - comprehensive coverage of all number formats.
 var numberFormatTests = map[string]struct {
 	source string
 	token  Token
@@ -130,7 +130,7 @@ var numberFormatTests = map[string]struct {
 	"tiny float":    {"0.000000001", Token{TokenNumber, 1, "0.000000001"}},
 }
 
-// Atom edge case tests
+// Atom edge case tests.
 var atomEdgeCaseTests = map[string]struct {
 	source string
 	token  Token
@@ -173,11 +173,14 @@ var atomEdgeCaseTests = map[string]struct {
 	"greek":          {"αβγδε", Token{TokenAtom, 1, "αβγδε"}},
 
 	// Very long atoms
-	"long atom":  {strings.Repeat("a", 100), Token{TokenAtom, 1, strings.Repeat("a", 100)}},
-	"long mixed": {"very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols", Token{TokenAtom, 1, "very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols"}},
+	"long atom": {strings.Repeat("a", 100), Token{TokenAtom, 1, strings.Repeat("a", 100)}},
+	"long mixed": {
+		"very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols",
+		Token{TokenAtom, 1, "very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols"},
+	},
 }
 
-// Multi-token sequence tests
+// Multi-token sequence tests.
 var sequenceTests = map[string]struct {
 	source string
 	tokens []Token
@@ -242,7 +245,7 @@ var sequenceTests = map[string]struct {
 	},
 }
 
-// Whitespace and formatting tests
+// Whitespace and formatting tests.
 var whitespaceTests = map[string]struct {
 	source string
 	tokens []Token
@@ -289,7 +292,7 @@ var whitespaceTests = map[string]struct {
 	},
 }
 
-// Comment tests
+// Comment tests.
 var commentTests = map[string]struct {
 	source string
 	tokens []Token
@@ -345,7 +348,7 @@ var commentTests = map[string]struct {
 	},
 }
 
-// Line number tracking tests
+// Line number tracking tests.
 var lineNumberTests = map[string]struct {
 	source string
 	tokens []Token
@@ -398,7 +401,7 @@ var lineNumberTests = map[string]struct {
 	},
 }
 
-// Edge cases and boundary conditions
+// Edge cases and boundary conditions.
 var edgeCaseTests = map[string]struct {
 	source string
 	tokens []Token
@@ -443,7 +446,7 @@ var edgeCaseTests = map[string]struct {
 	},
 }
 
-// Error condition tests
+// Error condition tests.
 var errorTests = map[string]struct {
 	source      string
 	expectError bool
@@ -512,7 +515,7 @@ var errorTests = map[string]struct {
 	},
 }
 
-// Main test functions
+// Main test functions.
 func TestBasicTokens(t *testing.T) {
 	for name, tc := range basicTokenTests {
 		t.Run(name, func(t *testing.T) {
@@ -640,16 +643,14 @@ func TestErrorConditions(t *testing.T) {
 				} else if !strings.Contains(token.Val, tc.errorMsg) {
 					t.Errorf("expected error message to contain %q, got %q", tc.errorMsg, token.Val)
 				}
-			} else {
-				if token.Type == TokenErr {
-					t.Errorf("unexpected error: %s", token.Val)
-				}
+			} else if token.Type == TokenErr {
+				t.Errorf("unexpected error: %s", token.Val)
 			}
 		})
 	}
 }
 
-// Performance and stress tests
+// Performance and stress tests.
 func TestLargeInput(t *testing.T) {
 	// Test with a large input to ensure no performance issues
 	largeAtom := strings.Repeat("a", 10000)

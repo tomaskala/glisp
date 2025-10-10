@@ -99,7 +99,7 @@ func (t *Tokenizer) errorf(format string, args ...any) stateFn {
 }
 
 func (t *Tokenizer) next() rune {
-	if int(t.pos) >= len(t.source) {
+	if t.pos >= len(t.source) {
 		t.atEOF = true
 		return eof
 	}
@@ -123,7 +123,9 @@ func (t *Tokenizer) peek() rune {
 }
 
 func (t *Tokenizer) NextToken() Token {
-	for state := readExpr; state != nil; state = state(t) {
+	state := readExpr
+	for state != nil {
+		state = state(t)
 	}
 	return t.token
 }
@@ -198,13 +200,14 @@ func readNumber(t *Tokenizer) stateFn {
 	// Decimal number by default.
 	digits := "0123456789_"
 	if t.accept("0") {
-		if t.accept("Xx") {
+		switch {
+		case t.accept("Xx"):
 			// Try hexadecimal.
 			digits = "0123456789abcdefABCDEF_"
-		} else if t.accept("Oo") {
+		case t.accept("Oo"):
 			// Try octal.
 			digits = "01234567_"
-		} else if t.accept("Bb") {
+		case t.accept("Bb"):
 			// Try binary.
 			digits = "01_"
 		}
@@ -247,5 +250,6 @@ func isAtomStart(r rune) bool {
 }
 
 func isAtom(r rune) bool {
-	return unicode.IsPrint(r) && !unicode.IsSpace(r) && r != unicode.ReplacementChar && !strings.ContainsRune(forbiddenInAtom, r)
+	return unicode.IsPrint(r) && !unicode.IsSpace(r) && r != unicode.ReplacementChar &&
+		!strings.ContainsRune(forbiddenInAtom, r)
 }

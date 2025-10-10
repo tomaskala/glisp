@@ -62,7 +62,7 @@ func (p *Parser) consume(expected tokenizer.TokenType) {
 
 // Program:
 //
-// expr*
+// expr*.
 func (p *Parser) parseProgram() *ast.Program {
 	prog := &ast.Program{}
 	for p.tok.Type != tokenizer.TokenEOF {
@@ -76,7 +76,7 @@ func (p *Parser) parseProgram() *ast.Program {
 
 // Expr:
 //
-// call | quote | number | atom
+// call | quote | number | atom.
 func (p *Parser) parseExpr() ast.Node {
 	switch tok := p.tok; tok.Type {
 	case tokenizer.TokenLeftParen:
@@ -157,7 +157,7 @@ func (p *Parser) parseCall() ast.Node {
 // "quote" is past
 //
 // Parses the long form (quote expr), as opposed to the shorthand 'expr.
-func (p *Parser) parseLongQuote(tok tokenizer.Token) ast.Node {
+func (p *Parser) parseLongQuote(tok tokenizer.Token) *ast.Quote {
 	quotedExpr := p.parseExpr()
 	p.consume(tokenizer.TokenRightParen)
 	return &ast.Quote{Value: quotedExpr, Tok: tok}
@@ -168,8 +168,8 @@ func (p *Parser) parseLongQuote(tok tokenizer.Token) ast.Node {
 // "(" "define" atom expr ")"
 //
 // "(" is past
-// "define" is past
-func (p *Parser) parseDefine(tok tokenizer.Token) ast.Node {
+// "define" is past.
+func (p *Parser) parseDefine(tok tokenizer.Token) *ast.Define {
 	p.expect(tokenizer.TokenAtom)
 	name := p.tok.Val
 	p.defineName = name
@@ -186,8 +186,8 @@ func (p *Parser) parseDefine(tok tokenizer.Token) ast.Node {
 // "(" "letrec" "(" ("(" atom expr ")")* ")" expr ")"
 //
 // "(" is past
-// "let"/"let*"/"letrec" is past
-func (p *Parser) parseLet(tok tokenizer.Token, kind ast.LetKind) ast.Node {
+// "let"/"let*"/"letrec" is past.
+func (p *Parser) parseLet(tok tokenizer.Token, kind ast.LetKind) *ast.Let {
 	var bindings []ast.Binding
 	p.expect(tokenizer.TokenLeftParen)
 	p.next()
@@ -212,8 +212,8 @@ func (p *Parser) parseLet(tok tokenizer.Token, kind ast.LetKind) ast.Node {
 // "(" "lambda" (atom | "(" expr* ("." expr)? ")") expr ")"
 //
 // "(" is past
-// "lambda" is past
-func (p *Parser) parseLambda(tok tokenizer.Token) ast.Node {
+// "lambda" is past.
+func (p *Parser) parseLambda(tok tokenizer.Token) *ast.Function {
 	var params []string
 	var dotParam string
 	switch p.tok.Type {
@@ -236,8 +236,8 @@ func (p *Parser) parseLambda(tok tokenizer.Token) ast.Node {
 // "(" "if" expr expr expr ")"
 //
 // "(" is past
-// "if" is past
-func (p *Parser) parseIf(tok tokenizer.Token) ast.Node {
+// "if" is past.
+func (p *Parser) parseIf(tok tokenizer.Token) *ast.If {
 	cond := p.parseExpr()
 	p.next()
 	thenBranch := p.parseExpr()
@@ -252,8 +252,8 @@ func (p *Parser) parseIf(tok tokenizer.Token) ast.Node {
 // "(" "cond" ( "(" expr expr ")" )* ")"
 //
 // "(" is past
-// "cond" is past
-func (p *Parser) parseCond(tok tokenizer.Token) ast.Node {
+// "cond" is past.
+func (p *Parser) parseCond(tok tokenizer.Token) *ast.Cond {
 	var clauses []ast.CondClause
 	for p.tok.Type != tokenizer.TokenRightParen {
 		p.expect(tokenizer.TokenLeftParen)
@@ -273,8 +273,8 @@ func (p *Parser) parseCond(tok tokenizer.Token) ast.Node {
 // "(" "and" expr* ")"
 //
 // "(" is past
-// "and" is past
-func (p *Parser) parseAnd(tok tokenizer.Token) ast.Node {
+// "and" is past.
+func (p *Parser) parseAnd(tok tokenizer.Token) *ast.And {
 	exprs := p.parseList()
 	return &ast.And{Exprs: exprs, Tok: tok}
 }
@@ -284,8 +284,8 @@ func (p *Parser) parseAnd(tok tokenizer.Token) ast.Node {
 // "(" "or" expr* ")"
 //
 // "(" is past
-// "or" is past
-func (p *Parser) parseOr(tok tokenizer.Token) ast.Node {
+// "or" is past.
+func (p *Parser) parseOr(tok tokenizer.Token) *ast.Or {
 	exprs := p.parseList()
 	return &ast.Or{Exprs: exprs, Tok: tok}
 }
@@ -295,8 +295,8 @@ func (p *Parser) parseOr(tok tokenizer.Token) ast.Node {
 // "(" "set!" atom expr ")"
 //
 // "(" is past
-// "set!" is past
-func (p *Parser) parseSet(tok tokenizer.Token) ast.Node {
+// "set!" is past.
+func (p *Parser) parseSet(tok tokenizer.Token) *ast.Set {
 	p.expect(tokenizer.TokenAtom)
 	id := p.tok.Val
 	p.next()
@@ -310,8 +310,8 @@ func (p *Parser) parseSet(tok tokenizer.Token) ast.Node {
 // "(" "begin" expr* expr ")"
 //
 // "(" is past
-// "begin" is past
-func (p *Parser) parseBegin(tok tokenizer.Token) ast.Node {
+// "begin" is past.
+func (p *Parser) parseBegin(tok tokenizer.Token) *ast.Begin {
 	exprs := p.parseList()
 	if len(exprs) == 0 {
 		panic(p.errorf("begin requires at least one expression"))
@@ -323,7 +323,7 @@ func (p *Parser) parseBegin(tok tokenizer.Token) ast.Node {
 //
 // "(" expr* ")"
 //
-// "(" is past
+// "(" is past.
 func (p *Parser) parseList() []ast.Node {
 	var args []ast.Node
 	for p.tok.Type != tokenizer.TokenRightParen {
@@ -345,10 +345,7 @@ func (p *Parser) parseList() []ast.Node {
 func (p *Parser) parseStringList() ([]string, string) {
 	var args []string
 	var dotArg string
-	for {
-		if p.tok.Type == tokenizer.TokenRightParen {
-			break
-		}
+	for p.tok.Type != tokenizer.TokenRightParen {
 		if p.tok.Type == tokenizer.TokenDot {
 			p.consume(tokenizer.TokenAtom)
 			dotArg = p.tok.Val
@@ -366,16 +363,16 @@ func (p *Parser) parseStringList() ([]string, string) {
 //
 // "'" expr
 //
-// "'" is past
-func (p *Parser) parseQuote(tok tokenizer.Token) ast.Node {
+// "'" is past.
+func (p *Parser) parseQuote(tok tokenizer.Token) *ast.Quote {
 	expr := p.parseExpr()
 	return &ast.Quote{Value: expr, Tok: tok}
 }
 
 // Number:
 //
-// number literal
-func (p *Parser) parseNumber(tok tokenizer.Token) ast.Node {
+// number literal.
+func (p *Parser) parseNumber(tok tokenizer.Token) *ast.Number {
 	if num, err := strconv.ParseInt(tok.Val, 0, 0); err == nil {
 		return &ast.Number{Value: float64(num), Tok: tok}
 	}

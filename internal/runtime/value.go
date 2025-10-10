@@ -203,7 +203,7 @@ func (v Value) String() string {
 }
 
 func (p *Pair) String() string {
-	var curr Value = MakePair(p)
+	curr := MakePair(p)
 	var sb strings.Builder
 	for sb.WriteByte('('); ; sb.WriteByte(' ') {
 		if cons, ok := curr.AsPair(); ok {

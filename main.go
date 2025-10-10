@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/chzyer/readline"
-
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/vm"
@@ -27,9 +27,11 @@ const (
 	prompt = "λ "
 )
 
-var disassemble = flag.Bool("disassemble", false, "disassemble each expression")
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
-var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+var (
+	disassemble = flag.Bool("disassemble", false, "disassemble each expression")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to `file`")
+	memprofile  = flag.String("memprofile", "", "write memory profile to `file`")
+)
 
 func balancedParentheses(lines []string) bool {
 	var stack []rune
@@ -74,7 +76,7 @@ func runRepl() int {
 
 	for {
 		line, err := rl.Readline()
-		if err == readline.ErrInterrupt {
+		if errors.Is(err, readline.ErrInterrupt) {
 			if len(line) == 0 {
 				if len(lines) == 0 {
 					break
@@ -82,7 +84,7 @@ func runRepl() int {
 				reset()
 			}
 			continue
-		} else if err == io.EOF {
+		} else if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -156,17 +158,17 @@ func runScript(path string) int {
 	return exitSuccess
 }
 
-func main() {
-	flag.Parse()
-
+func run() int {
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
+			log.Print("could not create CPU profile: ", err)
+			return exitIoError
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
+			log.Print("could not start CPU profile: ", err)
+			return exitIoError
 		}
 		defer pprof.StopCPUProfile()
 	}
@@ -182,16 +184,21 @@ func main() {
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
 		if err != nil {
-			log.Fatal("could not create memory profile: ", err)
+			log.Print("could not create memory profile: ", err)
+			return exitIoError
 		}
 		defer f.Close()
 		runtime.GC()
 		if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
-			log.Fatal("could not write memory profile: ", err)
+			log.Print("could not write memory profile: ", err)
+			return exitIoError
 		}
 	}
 
-	if *cpuprofile == "" && *memprofile == "" {
-		os.Exit(status)
-	}
+	return status
+}
+
+func main() {
+	flag.Parse()
+	os.Exit(run())
 }
