@@ -10,12 +10,12 @@ import (
 )
 
 type ParseError struct {
-	Position tokenizer.Position
-	Message  string
+	Line    int
+	Message string
 }
 
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse error at %d:%d: %s", e.Position.Line, e.Position.Column, e.Message)
+	return fmt.Sprintf("parse error at %d: %s", e.Line, e.Message)
 }
 
 type Parser struct {
@@ -47,7 +47,7 @@ func (p *Parser) next() {
 
 func (p *Parser) errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	return &ParseError{p.tok.Pos, message}
+	return &ParseError{p.tok.Line, message}
 }
 
 func (p *Parser) expect(expected tokenizer.TokenType) {

@@ -27,33 +27,33 @@ var basicTokenTests = map[string]struct {
 	token  Token
 }{
 	// Parentheses
-	"left paren":  {"(", Token{TokenLeftParen, Position{1, 1}, "("}},
-	"right paren": {")", Token{TokenRightParen, Position{1, 1}, ")"}},
+	"left paren":  {"(", Token{TokenLeftParen, 1, "("}},
+	"right paren": {")", Token{TokenRightParen, 1, ")"}},
 
 	// Special characters
-	"dot":   {".", Token{TokenDot, Position{1, 1}, "."}},
-	"quote": {"'", Token{TokenQuote, Position{1, 1}, "'"}},
+	"dot":   {".", Token{TokenDot, 1, "."}},
+	"quote": {"'", Token{TokenQuote, 1, "'"}},
 
 	// Basic atoms
-	"simple atom":        {"hello", Token{TokenAtom, Position{1, 1}, "hello"}},
-	"atom with dash":     {"hello-world", Token{TokenAtom, Position{1, 1}, "hello-world"}},
-	"atom with question": {"null?", Token{TokenAtom, Position{1, 1}, "null?"}},
-	"atom with numbers":  {"var123", Token{TokenAtom, Position{1, 1}, "var123"}},
-	"single char atom":   {"x", Token{TokenAtom, Position{1, 1}, "x"}},
+	"simple atom":        {"hello", Token{TokenAtom, 1, "hello"}},
+	"atom with dash":     {"hello-world", Token{TokenAtom, 1, "hello-world"}},
+	"atom with question": {"null?", Token{TokenAtom, 1, "null?"}},
+	"atom with numbers":  {"var123", Token{TokenAtom, 1, "var123"}},
+	"single char atom":   {"x", Token{TokenAtom, 1, "x"}},
 
 	// Mathematical operators
-	"plus":     {"+", Token{TokenAtom, Position{1, 1}, "+"}},
-	"minus":    {"-", Token{TokenAtom, Position{1, 1}, "-"}},
-	"multiply": {"*", Token{TokenAtom, Position{1, 1}, "*"}},
-	"divide":   {"/", Token{TokenAtom, Position{1, 1}, "/"}},
+	"plus":     {"+", Token{TokenAtom, 1, "+"}},
+	"minus":    {"-", Token{TokenAtom, 1, "-"}},
+	"multiply": {"*", Token{TokenAtom, 1, "*"}},
+	"divide":   {"/", Token{TokenAtom, 1, "/"}},
 
 	// Basic numbers
-	"zero":           {"0", Token{TokenNumber, Position{1, 1}, "0"}},
-	"positive int":   {"42", Token{TokenNumber, Position{1, 1}, "42"}},
-	"negative int":   {"-123", Token{TokenNumber, Position{1, 1}, "-123"}},
-	"explicit pos":   {"+456", Token{TokenNumber, Position{1, 1}, "+456"}},
-	"simple float":   {"3.14", Token{TokenNumber, Position{1, 1}, "3.14"}},
-	"negative float": {"-2.718", Token{TokenNumber, Position{1, 1}, "-2.718"}},
+	"zero":           {"0", Token{TokenNumber, 1, "0"}},
+	"positive int":   {"42", Token{TokenNumber, 1, "42"}},
+	"negative int":   {"-123", Token{TokenNumber, 1, "-123"}},
+	"explicit pos":   {"+456", Token{TokenNumber, 1, "+456"}},
+	"simple float":   {"3.14", Token{TokenNumber, 1, "3.14"}},
+	"negative float": {"-2.718", Token{TokenNumber, 1, "-2.718"}},
 }
 
 // Number format tests - comprehensive coverage of all number formats
@@ -62,72 +62,72 @@ var numberFormatTests = map[string]struct {
 	token  Token
 }{
 	// Decimal integers
-	"single digit":     {"7", Token{TokenNumber, Position{1, 1}, "7"}},
-	"multi digit":      {"1234567890", Token{TokenNumber, Position{1, 1}, "1234567890"}},
-	"with underscores": {"1_000_000", Token{TokenNumber, Position{1, 1}, "1_000_000"}},
-	"leading zeros":    {"00123", Token{TokenNumber, Position{1, 1}, "00123"}},
+	"single digit":     {"7", Token{TokenNumber, 1, "7"}},
+	"multi digit":      {"1234567890", Token{TokenNumber, 1, "1234567890"}},
+	"with underscores": {"1_000_000", Token{TokenNumber, 1, "1_000_000"}},
+	"leading zeros":    {"00123", Token{TokenNumber, 1, "00123"}},
 
 	// Hexadecimal
-	"hex lowercase":    {"0xff", Token{TokenNumber, Position{1, 1}, "0xff"}},
-	"hex uppercase":    {"0XFF", Token{TokenNumber, Position{1, 1}, "0XFF"}},
-	"hex mixed case":   {"0xDeAdBeEf", Token{TokenNumber, Position{1, 1}, "0xDeAdBeEf"}},
-	"hex with under":   {"0xFF_00_AA", Token{TokenNumber, Position{1, 1}, "0xFF_00_AA"}},
-	"hex signed pos":   {"+0x123", Token{TokenNumber, Position{1, 1}, "+0x123"}},
-	"hex signed neg":   {"-0xABC", Token{TokenNumber, Position{1, 1}, "-0xABC"}},
-	"hex single digit": {"0x1", Token{TokenNumber, Position{1, 1}, "0x1"}},
-	"hex all digits":   {"0x0123456789abcdefABCDEF", Token{TokenNumber, Position{1, 1}, "0x0123456789abcdefABCDEF"}},
+	"hex lowercase":    {"0xff", Token{TokenNumber, 1, "0xff"}},
+	"hex uppercase":    {"0XFF", Token{TokenNumber, 1, "0XFF"}},
+	"hex mixed case":   {"0xDeAdBeEf", Token{TokenNumber, 1, "0xDeAdBeEf"}},
+	"hex with under":   {"0xFF_00_AA", Token{TokenNumber, 1, "0xFF_00_AA"}},
+	"hex signed pos":   {"+0x123", Token{TokenNumber, 1, "+0x123"}},
+	"hex signed neg":   {"-0xABC", Token{TokenNumber, 1, "-0xABC"}},
+	"hex single digit": {"0x1", Token{TokenNumber, 1, "0x1"}},
+	"hex all digits":   {"0x0123456789abcdefABCDEF", Token{TokenNumber, 1, "0x0123456789abcdefABCDEF"}},
 
 	// Octal
-	"octal lowercase":  {"0o755", Token{TokenNumber, Position{1, 1}, "0o755"}},
-	"octal uppercase":  {"0O644", Token{TokenNumber, Position{1, 1}, "0O644"}},
-	"octal with under": {"0o777_444", Token{TokenNumber, Position{1, 1}, "0o777_444"}},
-	"octal signed pos": {"+0o123", Token{TokenNumber, Position{1, 1}, "+0o123"}},
-	"octal signed neg": {"-0o567", Token{TokenNumber, Position{1, 1}, "-0o567"}},
-	"octal single":     {"0o1", Token{TokenNumber, Position{1, 1}, "0o1"}},
-	"octal all digits": {"0o01234567", Token{TokenNumber, Position{1, 1}, "0o01234567"}},
+	"octal lowercase":  {"0o755", Token{TokenNumber, 1, "0o755"}},
+	"octal uppercase":  {"0O644", Token{TokenNumber, 1, "0O644"}},
+	"octal with under": {"0o777_444", Token{TokenNumber, 1, "0o777_444"}},
+	"octal signed pos": {"+0o123", Token{TokenNumber, 1, "+0o123"}},
+	"octal signed neg": {"-0o567", Token{TokenNumber, 1, "-0o567"}},
+	"octal single":     {"0o1", Token{TokenNumber, 1, "0o1"}},
+	"octal all digits": {"0o01234567", Token{TokenNumber, 1, "0o01234567"}},
 
 	// Binary
-	"binary lowercase":  {"0b101", Token{TokenNumber, Position{1, 1}, "0b101"}},
-	"binary uppercase":  {"0B110", Token{TokenNumber, Position{1, 1}, "0B110"}},
-	"binary with under": {"0b1010_1111", Token{TokenNumber, Position{1, 1}, "0b1010_1111"}},
-	"binary signed pos": {"+0b11", Token{TokenNumber, Position{1, 1}, "+0b11"}},
-	"binary signed neg": {"-0b01", Token{TokenNumber, Position{1, 1}, "-0b01"}},
-	"binary single":     {"0b1", Token{TokenNumber, Position{1, 1}, "0b1"}},
-	"binary long":       {"0b11110000111100001111", Token{TokenNumber, Position{1, 1}, "0b11110000111100001111"}},
+	"binary lowercase":  {"0b101", Token{TokenNumber, 1, "0b101"}},
+	"binary uppercase":  {"0B110", Token{TokenNumber, 1, "0B110"}},
+	"binary with under": {"0b1010_1111", Token{TokenNumber, 1, "0b1010_1111"}},
+	"binary signed pos": {"+0b11", Token{TokenNumber, 1, "+0b11"}},
+	"binary signed neg": {"-0b01", Token{TokenNumber, 1, "-0b01"}},
+	"binary single":     {"0b1", Token{TokenNumber, 1, "0b1"}},
+	"binary long":       {"0b11110000111100001111", Token{TokenNumber, 1, "0b11110000111100001111"}},
 
 	// Floating point decimal
-	"float simple":      {"1.5", Token{TokenNumber, Position{1, 1}, "1.5"}},
-	"float zero":        {"0.0", Token{TokenNumber, Position{1, 1}, "0.0"}},
-	"float no leading":  {".5", Token{TokenNumber, Position{1, 1}, ".5"}},
-	"float no trailing": {"5.", Token{TokenNumber, Position{1, 1}, "5."}},
-	"float with under":  {"3.141_592", Token{TokenNumber, Position{1, 1}, "3.141_592"}},
-	"float signed pos":  {"+2.5", Token{TokenNumber, Position{1, 1}, "+2.5"}},
-	"float signed neg":  {"-9.75", Token{TokenNumber, Position{1, 1}, "-9.75"}},
+	"float simple":      {"1.5", Token{TokenNumber, 1, "1.5"}},
+	"float zero":        {"0.0", Token{TokenNumber, 1, "0.0"}},
+	"float no leading":  {".5", Token{TokenNumber, 1, ".5"}},
+	"float no trailing": {"5.", Token{TokenNumber, 1, "5."}},
+	"float with under":  {"3.141_592", Token{TokenNumber, 1, "3.141_592"}},
+	"float signed pos":  {"+2.5", Token{TokenNumber, 1, "+2.5"}},
+	"float signed neg":  {"-9.75", Token{TokenNumber, 1, "-9.75"}},
 
 	// Scientific notation (decimal)
-	"sci simple":       {"1e5", Token{TokenNumber, Position{1, 1}, "1e5"}},
-	"sci uppercase":    {"1E5", Token{TokenNumber, Position{1, 1}, "1E5"}},
-	"sci negative exp": {"1e-5", Token{TokenNumber, Position{1, 1}, "1e-5"}},
-	"sci positive exp": {"1e+5", Token{TokenNumber, Position{1, 1}, "1e+5"}},
-	"sci float base":   {"3.14e2", Token{TokenNumber, Position{1, 1}, "3.14e2"}},
-	"sci with under":   {"1_000e3", Token{TokenNumber, Position{1, 1}, "1_000e3"}},
-	"sci signed":       {"-2.5E-10", Token{TokenNumber, Position{1, 1}, "-2.5E-10"}},
-	"sci zero exp":     {"5e0", Token{TokenNumber, Position{1, 1}, "5e0"}},
+	"sci simple":       {"1e5", Token{TokenNumber, 1, "1e5"}},
+	"sci uppercase":    {"1E5", Token{TokenNumber, 1, "1E5"}},
+	"sci negative exp": {"1e-5", Token{TokenNumber, 1, "1e-5"}},
+	"sci positive exp": {"1e+5", Token{TokenNumber, 1, "1e+5"}},
+	"sci float base":   {"3.14e2", Token{TokenNumber, 1, "3.14e2"}},
+	"sci with under":   {"1_000e3", Token{TokenNumber, 1, "1_000e3"}},
+	"sci signed":       {"-2.5E-10", Token{TokenNumber, 1, "-2.5E-10"}},
+	"sci zero exp":     {"5e0", Token{TokenNumber, 1, "5e0"}},
 
 	// Hexadecimal floating point
-	"hex float simple":   {"0x1p0", Token{TokenNumber, Position{1, 1}, "0x1p0"}},
-	"hex float with dot": {"0x1.5p2", Token{TokenNumber, Position{1, 1}, "0x1.5p2"}},
-	"hex float neg exp":  {"0x1p-2", Token{TokenNumber, Position{1, 1}, "0x1p-2"}},
-	"hex float pos exp":  {"0x1p+3", Token{TokenNumber, Position{1, 1}, "0x1p+3"}},
-	"hex float upper":    {"0X1.FP4", Token{TokenNumber, Position{1, 1}, "0X1.FP4"}},
-	"hex float signed":   {"-0x1.ABCp-5", Token{TokenNumber, Position{1, 1}, "-0x1.ABCp-5"}},
+	"hex float simple":   {"0x1p0", Token{TokenNumber, 1, "0x1p0"}},
+	"hex float with dot": {"0x1.5p2", Token{TokenNumber, 1, "0x1.5p2"}},
+	"hex float neg exp":  {"0x1p-2", Token{TokenNumber, 1, "0x1p-2"}},
+	"hex float pos exp":  {"0x1p+3", Token{TokenNumber, 1, "0x1p+3"}},
+	"hex float upper":    {"0X1.FP4", Token{TokenNumber, 1, "0X1.FP4"}},
+	"hex float signed":   {"-0x1.ABCp-5", Token{TokenNumber, 1, "-0x1.ABCp-5"}},
 
 	// Edge cases
-	"negative zero": {"-0", Token{TokenNumber, Position{1, 1}, "-0"}},
-	"positive zero": {"+0", Token{TokenNumber, Position{1, 1}, "+0"}},
-	"zero float":    {"0.00000", Token{TokenNumber, Position{1, 1}, "0.00000"}},
-	"large number":  {"999999999999999999", Token{TokenNumber, Position{1, 1}, "999999999999999999"}},
-	"tiny float":    {"0.000000001", Token{TokenNumber, Position{1, 1}, "0.000000001"}},
+	"negative zero": {"-0", Token{TokenNumber, 1, "-0"}},
+	"positive zero": {"+0", Token{TokenNumber, 1, "+0"}},
+	"zero float":    {"0.00000", Token{TokenNumber, 1, "0.00000"}},
+	"large number":  {"999999999999999999", Token{TokenNumber, 1, "999999999999999999"}},
+	"tiny float":    {"0.000000001", Token{TokenNumber, 1, "0.000000001"}},
 }
 
 // Atom edge case tests
@@ -136,45 +136,45 @@ var atomEdgeCaseTests = map[string]struct {
 	token  Token
 }{
 	// Special characters in atoms
-	"at symbol":    {"@", Token{TokenAtom, Position{1, 1}, "@"}},
-	"hash":         {"#", Token{TokenAtom, Position{1, 1}, "#"}},
-	"percent":      {"%", Token{TokenAtom, Position{1, 1}, "%"}},
-	"caret":        {"^", Token{TokenAtom, Position{1, 1}, "^"}},
-	"ampersand":    {"&", Token{TokenAtom, Position{1, 1}, "&"}},
-	"exclamation":  {"!", Token{TokenAtom, Position{1, 1}, "!"}},
-	"tilde":        {"~", Token{TokenAtom, Position{1, 1}, "~"}},
-	"backslash":    {"\\", Token{TokenAtom, Position{1, 1}, "\\"}},
-	"pipe":         {"|", Token{TokenAtom, Position{1, 1}, "|"}},
-	"colon":        {":", Token{TokenAtom, Position{1, 1}, ":"}},
-	"less than":    {"<", Token{TokenAtom, Position{1, 1}, "<"}},
-	"greater than": {">", Token{TokenAtom, Position{1, 1}, ">"}},
-	"equals":       {"=", Token{TokenAtom, Position{1, 1}, "="}},
-	"dollar":       {"$", Token{TokenAtom, Position{1, 1}, "$"}},
-	"underscore":   {"_", Token{TokenAtom, Position{1, 1}, "_"}},
+	"at symbol":    {"@", Token{TokenAtom, 1, "@"}},
+	"hash":         {"#", Token{TokenAtom, 1, "#"}},
+	"percent":      {"%", Token{TokenAtom, 1, "%"}},
+	"caret":        {"^", Token{TokenAtom, 1, "^"}},
+	"ampersand":    {"&", Token{TokenAtom, 1, "&"}},
+	"exclamation":  {"!", Token{TokenAtom, 1, "!"}},
+	"tilde":        {"~", Token{TokenAtom, 1, "~"}},
+	"backslash":    {"\\", Token{TokenAtom, 1, "\\"}},
+	"pipe":         {"|", Token{TokenAtom, 1, "|"}},
+	"colon":        {":", Token{TokenAtom, 1, ":"}},
+	"less than":    {"<", Token{TokenAtom, 1, "<"}},
+	"greater than": {">", Token{TokenAtom, 1, ">"}},
+	"equals":       {"=", Token{TokenAtom, 1, "="}},
+	"dollar":       {"$", Token{TokenAtom, 1, "$"}},
+	"underscore":   {"_", Token{TokenAtom, 1, "_"}},
 
 	// Complex atoms
-	"mixed special":   {"hello-world@test", Token{TokenAtom, Position{1, 1}, "hello-world@test"}},
-	"operator like":   {"<=", Token{TokenAtom, Position{1, 1}, "<="}},
-	"operator like 2": {">=", Token{TokenAtom, Position{1, 1}, ">="}},
-	"operator like 3": {"<>", Token{TokenAtom, Position{1, 1}, "<>"}},
-	"lisp style":      {"car-cdr-cons", Token{TokenAtom, Position{1, 1}, "car-cdr-cons"}},
-	"with numbers":    {"test123abc", Token{TokenAtom, Position{1, 1}, "test123abc"}},
-	"ends with num":   {"var2", Token{TokenAtom, Position{1, 1}, "var2"}},
-	"boolean true":    {"#t", Token{TokenAtom, Position{1, 1}, "#t"}},
-	"boolean false":   {"#f", Token{TokenAtom, Position{1, 1}, "#f"}},
-	"keyword style":   {":keyword", Token{TokenAtom, Position{1, 1}, ":keyword"}},
-	"namespace style": {"ns/func", Token{TokenAtom, Position{1, 1}, "ns/func"}},
+	"mixed special":   {"hello-world@test", Token{TokenAtom, 1, "hello-world@test"}},
+	"operator like":   {"<=", Token{TokenAtom, 1, "<="}},
+	"operator like 2": {">=", Token{TokenAtom, 1, ">="}},
+	"operator like 3": {"<>", Token{TokenAtom, 1, "<>"}},
+	"lisp style":      {"car-cdr-cons", Token{TokenAtom, 1, "car-cdr-cons"}},
+	"with numbers":    {"test123abc", Token{TokenAtom, 1, "test123abc"}},
+	"ends with num":   {"var2", Token{TokenAtom, 1, "var2"}},
+	"boolean true":    {"#t", Token{TokenAtom, 1, "#t"}},
+	"boolean false":   {"#f", Token{TokenAtom, 1, "#f"}},
+	"keyword style":   {":keyword", Token{TokenAtom, 1, ":keyword"}},
+	"namespace style": {"ns/func", Token{TokenAtom, 1, "ns/func"}},
 
 	// Unicode atoms
-	"unicode lambda": {"λ", Token{TokenAtom, Position{1, 1}, "λ"}},
-	"unicode mixed":  {"test-λ-func", Token{TokenAtom, Position{1, 1}, "test-λ-func"}},
-	"unicode emoji":  {"🚀", Token{TokenAtom, Position{1, 1}, "🚀"}},
-	"japanese":       {"こんにちは", Token{TokenAtom, Position{1, 1}, "こんにちは"}},
-	"greek":          {"αβγδε", Token{TokenAtom, Position{1, 1}, "αβγδε"}},
+	"unicode lambda": {"λ", Token{TokenAtom, 1, "λ"}},
+	"unicode mixed":  {"test-λ-func", Token{TokenAtom, 1, "test-λ-func"}},
+	"unicode emoji":  {"🚀", Token{TokenAtom, 1, "🚀"}},
+	"japanese":       {"こんにちは", Token{TokenAtom, 1, "こんにちは"}},
+	"greek":          {"αβγδε", Token{TokenAtom, 1, "αβγδε"}},
 
 	// Very long atoms
-	"long atom":  {strings.Repeat("a", 100), Token{TokenAtom, Position{1, 1}, strings.Repeat("a", 100)}},
-	"long mixed": {"very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols", Token{TokenAtom, Position{1, 1}, "very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols"}},
+	"long atom":  {strings.Repeat("a", 100), Token{TokenAtom, 1, strings.Repeat("a", 100)}},
+	"long mixed": {"very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols", Token{TokenAtom, 1, "very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols"}},
 }
 
 // Multi-token sequence tests
@@ -185,59 +185,59 @@ var sequenceTests = map[string]struct {
 	"simple list": {
 		source: "(+ 1 2)",
 		tokens: []Token{
-			{TokenLeftParen, Position{1, 1}, "("},
-			{TokenAtom, Position{1, 2}, "+"},
-			{TokenNumber, Position{1, 4}, "1"},
-			{TokenNumber, Position{1, 6}, "2"},
-			{TokenRightParen, Position{1, 7}, ")"},
-			{TokenEOF, Position{1, 8}, "EOF"},
+			{TokenLeftParen, 1, "("},
+			{TokenAtom, 1, "+"},
+			{TokenNumber, 1, "1"},
+			{TokenNumber, 1, "2"},
+			{TokenRightParen, 1, ")"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"nested list": {
 		source: "(f (g x) y)",
 		tokens: []Token{
-			{TokenLeftParen, Position{1, 1}, "("},
-			{TokenAtom, Position{1, 2}, "f"},
-			{TokenLeftParen, Position{1, 4}, "("},
-			{TokenAtom, Position{1, 5}, "g"},
-			{TokenAtom, Position{1, 7}, "x"},
-			{TokenRightParen, Position{1, 8}, ")"},
-			{TokenAtom, Position{1, 10}, "y"},
-			{TokenRightParen, Position{1, 11}, ")"},
-			{TokenEOF, Position{1, 12}, "EOF"},
+			{TokenLeftParen, 1, "("},
+			{TokenAtom, 1, "f"},
+			{TokenLeftParen, 1, "("},
+			{TokenAtom, 1, "g"},
+			{TokenAtom, 1, "x"},
+			{TokenRightParen, 1, ")"},
+			{TokenAtom, 1, "y"},
+			{TokenRightParen, 1, ")"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"quoted expression": {
 		source: "'(a b c)",
 		tokens: []Token{
-			{TokenQuote, Position{1, 1}, "'"},
-			{TokenLeftParen, Position{1, 2}, "("},
-			{TokenAtom, Position{1, 3}, "a"},
-			{TokenAtom, Position{1, 5}, "b"},
-			{TokenAtom, Position{1, 7}, "c"},
-			{TokenRightParen, Position{1, 8}, ")"},
-			{TokenEOF, Position{1, 9}, "EOF"},
+			{TokenQuote, 1, "'"},
+			{TokenLeftParen, 1, "("},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 1, "b"},
+			{TokenAtom, 1, "c"},
+			{TokenRightParen, 1, ")"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"mixed numbers": {
 		source: "42 3.14 0xFF -123 +456",
 		tokens: []Token{
-			{TokenNumber, Position{1, 1}, "42"},
-			{TokenNumber, Position{1, 4}, "3.14"},
-			{TokenNumber, Position{1, 9}, "0xFF"},
-			{TokenNumber, Position{1, 14}, "-123"},
-			{TokenNumber, Position{1, 19}, "+456"},
-			{TokenEOF, Position{1, 23}, "EOF"},
+			{TokenNumber, 1, "42"},
+			{TokenNumber, 1, "3.14"},
+			{TokenNumber, 1, "0xFF"},
+			{TokenNumber, 1, "-123"},
+			{TokenNumber, 1, "+456"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"dots and quotes": {
 		source: ". ' . '",
 		tokens: []Token{
-			{TokenDot, Position{1, 1}, "."},
-			{TokenQuote, Position{1, 3}, "'"},
-			{TokenDot, Position{1, 5}, "."},
-			{TokenQuote, Position{1, 7}, "'"},
-			{TokenEOF, Position{1, 8}, "EOF"},
+			{TokenDot, 1, "."},
+			{TokenQuote, 1, "'"},
+			{TokenDot, 1, "."},
+			{TokenQuote, 1, "'"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 }
@@ -250,41 +250,41 @@ var whitespaceTests = map[string]struct {
 	"spaces": {
 		source: "  a   b  ",
 		tokens: []Token{
-			{TokenAtom, Position{1, 3}, "a"},
-			{TokenAtom, Position{1, 7}, "b"},
-			{TokenEOF, Position{1, 10}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 1, "b"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"tabs": {
 		source: "\ta\t\tb\t",
 		tokens: []Token{
-			{TokenAtom, Position{1, 2}, "a"},
-			{TokenAtom, Position{1, 5}, "b"},
-			{TokenEOF, Position{1, 7}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 1, "b"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"newlines": {
 		source: "a\nb\n",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "a"},
-			{TokenAtom, Position{2, 1}, "b"},
-			{TokenEOF, Position{3, 1}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 2, "b"},
+			{TokenEOF, 3, "EOF"},
 		},
 	},
 	"mixed whitespace": {
 		source: " \t\n a \t\n b \t\n ",
 		tokens: []Token{
-			{TokenAtom, Position{2, 2}, "a"},
-			{TokenAtom, Position{3, 2}, "b"},
-			{TokenEOF, Position{4, 2}, "EOF"},
+			{TokenAtom, 2, "a"},
+			{TokenAtom, 3, "b"},
+			{TokenEOF, 4, "EOF"},
 		},
 	},
 	"carriage returns": {
 		source: "a\r\nb\r\n",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "a"},
-			{TokenAtom, Position{2, 1}, "b"},
-			{TokenEOF, Position{3, 1}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 2, "b"},
+			{TokenEOF, 3, "EOF"},
 		},
 	},
 }
@@ -297,103 +297,103 @@ var commentTests = map[string]struct {
 	"line comment": {
 		source: "; this is a comment\na",
 		tokens: []Token{
-			{TokenAtom, Position{2, 1}, "a"},
-			{TokenEOF, Position{2, 2}, "EOF"},
+			{TokenAtom, 2, "a"},
+			{TokenEOF, 2, "EOF"},
 		},
 	},
 	"comment at end": {
 		source: "a ; comment",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "a"},
-			{TokenEOF, Position{1, 12}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"multiple comments": {
 		source: "; first\na ; second\n; third\nb",
 		tokens: []Token{
-			{TokenAtom, Position{2, 1}, "a"},
-			{TokenAtom, Position{4, 1}, "b"},
-			{TokenEOF, Position{4, 2}, "EOF"},
+			{TokenAtom, 2, "a"},
+			{TokenAtom, 4, "b"},
+			{TokenEOF, 4, "EOF"},
 		},
 	},
 	"comment with specials": {
 		source: "; comment with ()'\". special chars\na",
 		tokens: []Token{
-			{TokenAtom, Position{2, 1}, "a"},
-			{TokenEOF, Position{2, 2}, "EOF"},
+			{TokenAtom, 2, "a"},
+			{TokenEOF, 2, "EOF"},
 		},
 	},
 	"empty comment": {
 		source: ";\na",
 		tokens: []Token{
-			{TokenAtom, Position{2, 1}, "a"},
-			{TokenEOF, Position{2, 2}, "EOF"},
+			{TokenAtom, 2, "a"},
+			{TokenEOF, 2, "EOF"},
 		},
 	},
 	"comment only": {
 		source: "; just a comment",
 		tokens: []Token{
-			{TokenEOF, Position{1, 17}, "EOF"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"comment no newline": {
 		source: "a ; comment at end",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "a"},
-			{TokenEOF, Position{1, 19}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 }
 
-// Position tracking tests
-var positionTests = map[string]struct {
+// Line number tracking tests
+var lineNumberTests = map[string]struct {
 	source string
 	tokens []Token
 }{
 	"multiline positions": {
 		source: "a\n  b\n    c",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "a"},
-			{TokenAtom, Position{2, 3}, "b"},
-			{TokenAtom, Position{3, 5}, "c"},
-			{TokenEOF, Position{3, 6}, "EOF"},
+			{TokenAtom, 1, "a"},
+			{TokenAtom, 2, "b"},
+			{TokenAtom, 3, "c"},
+			{TokenEOF, 3, "EOF"},
 		},
 	},
 	"complex multiline": {
 		source: "(define factorial\n  (lambda (n)\n    (if (= n 0)\n        1\n        (* n (factorial (- n 1))))))",
 		tokens: []Token{
-			{TokenLeftParen, Position{1, 1}, "("},
-			{TokenAtom, Position{1, 2}, "define"},
-			{TokenAtom, Position{1, 9}, "factorial"},
-			{TokenLeftParen, Position{2, 3}, "("},
-			{TokenAtom, Position{2, 4}, "lambda"},
-			{TokenLeftParen, Position{2, 11}, "("},
-			{TokenAtom, Position{2, 12}, "n"},
-			{TokenRightParen, Position{2, 13}, ")"},
-			{TokenLeftParen, Position{3, 5}, "("},
-			{TokenAtom, Position{3, 6}, "if"},
-			{TokenLeftParen, Position{3, 9}, "("},
-			{TokenAtom, Position{3, 10}, "="},
-			{TokenAtom, Position{3, 12}, "n"},
-			{TokenNumber, Position{3, 14}, "0"},
-			{TokenRightParen, Position{3, 15}, ")"},
-			{TokenNumber, Position{4, 9}, "1"},
-			{TokenLeftParen, Position{5, 9}, "("},
-			{TokenAtom, Position{5, 10}, "*"},
-			{TokenAtom, Position{5, 12}, "n"},
-			{TokenLeftParen, Position{5, 14}, "("},
-			{TokenAtom, Position{5, 15}, "factorial"},
-			{TokenLeftParen, Position{5, 25}, "("},
-			{TokenAtom, Position{5, 26}, "-"},
-			{TokenAtom, Position{5, 28}, "n"},
-			{TokenNumber, Position{5, 30}, "1"},
-			{TokenRightParen, Position{5, 31}, ")"},
-			{TokenRightParen, Position{5, 32}, ")"},
-			{TokenRightParen, Position{5, 33}, ")"},
-			{TokenRightParen, Position{5, 34}, ")"},
-			{TokenRightParen, Position{5, 35}, ")"},
-			{TokenRightParen, Position{5, 36}, ")"},
-			{TokenEOF, Position{5, 37}, "EOF"},
+			{TokenLeftParen, 1, "("},
+			{TokenAtom, 1, "define"},
+			{TokenAtom, 1, "factorial"},
+			{TokenLeftParen, 2, "("},
+			{TokenAtom, 2, "lambda"},
+			{TokenLeftParen, 2, "("},
+			{TokenAtom, 2, "n"},
+			{TokenRightParen, 2, ")"},
+			{TokenLeftParen, 3, "("},
+			{TokenAtom, 3, "if"},
+			{TokenLeftParen, 3, "("},
+			{TokenAtom, 3, "="},
+			{TokenAtom, 3, "n"},
+			{TokenNumber, 3, "0"},
+			{TokenRightParen, 3, ")"},
+			{TokenNumber, 4, "1"},
+			{TokenLeftParen, 5, "("},
+			{TokenAtom, 5, "*"},
+			{TokenAtom, 5, "n"},
+			{TokenLeftParen, 5, "("},
+			{TokenAtom, 5, "factorial"},
+			{TokenLeftParen, 5, "("},
+			{TokenAtom, 5, "-"},
+			{TokenAtom, 5, "n"},
+			{TokenNumber, 5, "1"},
+			{TokenRightParen, 5, ")"},
+			{TokenRightParen, 5, ")"},
+			{TokenRightParen, 5, ")"},
+			{TokenRightParen, 5, ")"},
+			{TokenRightParen, 5, ")"},
+			{TokenRightParen, 5, ")"},
+			{TokenEOF, 5, "EOF"},
 		},
 	},
 }
@@ -406,39 +406,39 @@ var edgeCaseTests = map[string]struct {
 	"empty input": {
 		source: "",
 		tokens: []Token{
-			{TokenEOF, Position{1, 1}, "EOF"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"only whitespace": {
 		source: "   \n\t  \n ",
 		tokens: []Token{
-			{TokenEOF, Position{3, 2}, "EOF"},
+			{TokenEOF, 3, "EOF"},
 		},
 	},
 	"plus minus edge": {
 		source: "+ - +1 -2 +abc -def",
 		tokens: []Token{
-			{TokenAtom, Position{1, 1}, "+"},
-			{TokenAtom, Position{1, 3}, "-"},
-			{TokenNumber, Position{1, 5}, "+1"},
-			{TokenNumber, Position{1, 8}, "-2"},
-			{TokenAtom, Position{1, 11}, "+abc"},
-			{TokenAtom, Position{1, 16}, "-def"},
-			{TokenEOF, Position{1, 20}, "EOF"},
+			{TokenAtom, 1, "+"},
+			{TokenAtom, 1, "-"},
+			{TokenNumber, 1, "+1"},
+			{TokenNumber, 1, "-2"},
+			{TokenAtom, 1, "+abc"},
+			{TokenAtom, 1, "-def"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 	"zero prefixes": {
 		source: "0 0x 0o 0b 0xff 0o755 0b101",
 		tokens: []Token{
 			// The tokenizer will miss some invalid numbers which will be later rejected by the parser.
-			{TokenNumber, Position{1, 1}, "0"},
-			{TokenNumber, Position{1, 3}, "0x"},
-			{TokenNumber, Position{1, 6}, "0o"},
-			{TokenNumber, Position{1, 9}, "0b"},
-			{TokenNumber, Position{1, 12}, "0xff"},
-			{TokenNumber, Position{1, 17}, "0o755"},
-			{TokenNumber, Position{1, 23}, "0b101"},
-			{TokenEOF, Position{1, 28}, "EOF"},
+			{TokenNumber, 1, "0"},
+			{TokenNumber, 1, "0x"},
+			{TokenNumber, 1, "0o"},
+			{TokenNumber, 1, "0b"},
+			{TokenNumber, 1, "0xff"},
+			{TokenNumber, 1, "0o755"},
+			{TokenNumber, 1, "0b101"},
+			{TokenEOF, 1, "EOF"},
 		},
 	},
 }
@@ -599,8 +599,8 @@ func TestComments(t *testing.T) {
 	}
 }
 
-func TestPositions(t *testing.T) {
-	for name, tc := range positionTests {
+func TestLineNumbers(t *testing.T) {
+	for name, tc := range lineNumberTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
 			if !cmp.Equal(tokens, tc.tokens) {
@@ -695,14 +695,14 @@ func TestSignedNumbersVsAtoms(t *testing.T) {
 		source   string
 		expected Token
 	}{
-		{"+", Token{TokenAtom, Position{1, 1}, "+"}},
-		{"-", Token{TokenAtom, Position{1, 1}, "-"}},
-		{"+123", Token{TokenNumber, Position{1, 1}, "+123"}},
-		{"-123", Token{TokenNumber, Position{1, 1}, "-123"}},
-		{"+abc", Token{TokenAtom, Position{1, 1}, "+abc"}},
-		{"-abc", Token{TokenAtom, Position{1, 1}, "-abc"}},
-		{"+0xFF", Token{TokenNumber, Position{1, 1}, "+0xFF"}},
-		{"-0xFF", Token{TokenNumber, Position{1, 1}, "-0xFF"}},
+		{"+", Token{TokenAtom, 1, "+"}},
+		{"-", Token{TokenAtom, 1, "-"}},
+		{"+123", Token{TokenNumber, 1, "+123"}},
+		{"-123", Token{TokenNumber, 1, "-123"}},
+		{"+abc", Token{TokenAtom, 1, "+abc"}},
+		{"-abc", Token{TokenAtom, 1, "-abc"}},
+		{"+0xFF", Token{TokenNumber, 1, "+0xFF"}},
+		{"-0xFF", Token{TokenNumber, 1, "-0xFF"}},
 	}
 
 	for _, tc := range tests {
@@ -727,30 +727,30 @@ func TestCommentEdgeCases(t *testing.T) {
 			name:   "comment with no newline at EOF",
 			source: "a; comment",
 			tokens: []Token{
-				{TokenAtom, Position{1, 1}, "a"},
-				{TokenEOF, Position{1, 11}, "EOF"},
+				{TokenAtom, 1, "a"},
+				{TokenEOF, 1, "EOF"},
 			},
 		},
 		{
 			name:   "semicolon in atom",
 			source: "test;atom",
 			tokens: []Token{
-				{TokenAtom, Position{1, 1}, "test"},
-				{TokenEOF, Position{1, 10}, "EOF"}, // ';' starts comment, rest is ignored
+				{TokenAtom, 1, "test"},
+				{TokenEOF, 1, "EOF"}, // ';' starts comment, rest is ignored
 			},
 		},
 		{
 			name:   "multiple semicolons in comment",
 			source: "; ;;; comment ;;;\na",
 			tokens: []Token{
-				{TokenAtom, Position{2, 1}, "a"},
-				{TokenEOF, Position{2, 2}, "EOF"},
+				{TokenAtom, 2, "a"},
+				{TokenEOF, 2, "EOF"},
 			},
 		},
 		{
 			name:   "semicolon alone",
 			source: ";",
-			tokens: []Token{{TokenEOF, Position{1, 2}, "EOF"}},
+			tokens: []Token{{TokenEOF, 1, "EOF"}},
 		},
 	}
 
@@ -775,27 +775,27 @@ func TestUnicodeHandling(t *testing.T) {
 		{
 			name:   "basic unicode",
 			source: "λ",
-			token:  Token{TokenAtom, Position{1, 1}, "λ"},
+			token:  Token{TokenAtom, 1, "λ"},
 		},
 		{
 			name:   "emoji",
 			source: "🚀",
-			token:  Token{TokenAtom, Position{1, 1}, "🚀"},
+			token:  Token{TokenAtom, 1, "🚀"},
 		},
 		{
 			name:   "mixed ascii unicode",
 			source: "test-λ-func",
-			token:  Token{TokenAtom, Position{1, 1}, "test-λ-func"},
+			token:  Token{TokenAtom, 1, "test-λ-func"},
 		},
 		{
 			name:   "japanese",
 			source: "こんにちは",
-			token:  Token{TokenAtom, Position{1, 1}, "こんにちは"},
+			token:  Token{TokenAtom, 1, "こんにちは"},
 		},
 		{
 			name:   "arabic",
 			source: "مرحبا",
-			token:  Token{TokenAtom, Position{1, 1}, "مرحبا"},
+			token:  Token{TokenAtom, 1, "مرحبا"},
 		},
 	}
 

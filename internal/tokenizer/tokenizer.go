@@ -11,7 +11,7 @@ import (
 
 type Token struct {
 	Type TokenType // The type of this token.
-	Pos  Position  // The position of this token in the source text.
+	Line int       // The line number of this token in the source text.
 	Val  string    // The raw value of this token.
 }
 
@@ -27,11 +27,6 @@ func (t Token) String() string {
 }
 
 type TokenType int
-
-type Position struct {
-	Line   int // Line number of the token, 1-based.
-	Column int // Column number of the token on its line, 1-based.
-}
 
 const (
 	TokenEOF TokenType = iota
@@ -84,10 +79,8 @@ func (t *Tokenizer) ignore() {
 }
 
 func (t *Tokenizer) createToken(typ TokenType, val string) Token {
-	lastLineIdx := strings.LastIndex(t.source[:t.start], "\n")
 	line := strings.Count(t.source[:t.start], "\n") + 1
-	column := t.start - lastLineIdx
-	return Token{typ, Position{line, column}, val}
+	return Token{typ, line, val}
 }
 
 func (t *Tokenizer) emit(typ TokenType) stateFn {

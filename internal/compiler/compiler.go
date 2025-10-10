@@ -57,12 +57,12 @@ func (c *Compiler) errorf(format string, args ...any) error {
 }
 
 func (c *Compiler) emit1(code runtime.OpCode, token tokenizer.Token) {
-	c.function.Chunk.Write(code, token.Pos.Line)
+	c.function.Chunk.Write(code, token.Line)
 }
 
 func (c *Compiler) emit2(code1, code2 runtime.OpCode, token tokenizer.Token) {
-	c.function.Chunk.Write(code1, token.Pos.Line)
-	c.function.Chunk.Write(code2, token.Pos.Line)
+	c.function.Chunk.Write(code1, token.Line)
+	c.function.Chunk.Write(code2, token.Line)
 }
 
 func (c *Compiler) emitJump(code runtime.OpCode, token tokenizer.Token) int {

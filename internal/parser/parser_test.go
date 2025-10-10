@@ -496,144 +496,144 @@ var complexTests = map[string]parserTest{
 }
 
 var errorTests = map[string]struct {
-	source      string
-	expectedMsg string
-	expectedPos tokenizer.Position
+	source       string
+	expectedMsg  string
+	expectedLine int
 }{
 	"unmatched paren": {
-		source:      "(+ 1 2",
-		expectedMsg: "Unexpected token: expected expression, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(+ 1 2",
+		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedLine: 1,
 	},
 	"incomplete define": {
-		source:      "(define x)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 10},
+		source:       "(define x)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"incomplete lambda": {
-		source:      "(lambda (x))",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 12},
+		source:       "(lambda (x))",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"incomplete let": {
-		source:      "(let ((x 1)))",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 13},
+		source:       "(let ((x 1)))",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"malformed let": {
-		source:      "(let (x 1) x)",
-		expectedMsg: "Unexpected token: expected TokenLeftParen, got TokenAtom",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(let (x 1) x)",
+		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenAtom",
+		expectedLine: 1,
 	},
 	"malformed binding": {
-		source:      "(let ((x)) x)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 9},
+		source:       "(let ((x)) x)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"incomplete quote": {
-		source:      "'",
-		expectedMsg: "Unexpected token: expected expression, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 2},
+		source:       "'",
+		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedLine: 1,
 	},
 	"bad lambda params": {
-		source:      "(lambda 123 x)",
-		expectedMsg: "Unexpected lambda parameter: TokenNumber",
-		expectedPos: tokenizer.Position{Line: 1, Column: 9},
+		source:       "(lambda 123 x)",
+		expectedMsg:  "Unexpected lambda parameter: TokenNumber",
+		expectedLine: 1,
 	},
 	"unterminated quote": {
-		source:      "(quote",
-		expectedMsg: "Unexpected token: expected expression, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(quote",
+		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedLine: 1,
 	},
 	"empty define": {
-		source:      "(define)",
-		expectedMsg: "Unexpected token: expected TokenAtom, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 8},
+		source:       "(define)",
+		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"define with number": {
-		source:      "(define 123 x)",
-		expectedMsg: "Unexpected token: expected TokenAtom, got TokenNumber",
-		expectedPos: tokenizer.Position{Line: 1, Column: 9},
+		source:       "(define 123 x)",
+		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenNumber",
+		expectedLine: 1,
 	},
 	"let missing bindings": {
-		source:      "(let)",
-		expectedMsg: "Unexpected token: expected TokenLeftParen, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 5},
+		source:       "(let)",
+		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"let unclosed bindings": {
-		source:      "(let ((x 1)",
-		expectedMsg: "Unexpected token: expected TokenLeftParen, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 12},
+		source:       "(let ((x 1)",
+		expectedMsg:  "Unexpected token: expected TokenLeftParen, got TokenEOF",
+		expectedLine: 1,
 	},
 	"lambda missing params": {
-		source:      "(lambda)",
-		expectedMsg: "Unexpected lambda parameter: TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 8},
+		source:       "(lambda)",
+		expectedMsg:  "Unexpected lambda parameter: TokenRightParen",
+		expectedLine: 1,
 	},
 	"dot without rest param": {
-		source:      "(lambda (x .) body)",
-		expectedMsg: "Unexpected token: expected TokenAtom, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 13},
+		source:       "(lambda (x .) body)",
+		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"multiple dots": {
-		source:      "(lambda (x . y . z) body)",
-		expectedMsg: "Unexpected token: expected TokenRightParen, got TokenDot",
-		expectedPos: tokenizer.Position{Line: 1, Column: 16},
+		source:       "(lambda (x . y . z) body)",
+		expectedMsg:  "Unexpected token: expected TokenRightParen, got TokenDot",
+		expectedLine: 1,
 	},
 	"invalid token": {
-		source:      "(",
-		expectedMsg: "Unexpected token: expected expression, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 2},
+		source:       "(",
+		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedLine: 1,
 	},
 	"nested unmatched": {
-		source:      "(+ (- 3",
-		expectedMsg: "Unexpected token: expected expression, got TokenEOF",
-		expectedPos: tokenizer.Position{Line: 1, Column: 8},
+		source:       "(+ (- 3",
+		expectedMsg:  "Unexpected token: expected expression, got TokenEOF",
+		expectedLine: 1,
 	},
 	"quote missing expr": {
-		source:      "(quote)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(quote)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"number overflow": {
-		source:      "999999999999999999999999999999999999999999999999999999999999999999",
-		expectedMsg: "Integer overflow",
-		expectedPos: tokenizer.Position{Line: 1, Column: 1},
+		source:       "999999999999999999999999999999999999999999999999999999999999999999",
+		expectedMsg:  "Integer overflow",
+		expectedLine: 1,
 	},
 	"invalid number": {
-		source:      "0xGHI",
-		expectedMsg: "Atom cannot start with a number",
-		expectedPos: tokenizer.Position{Line: 1, Column: 1},
+		source:       "0xGHI",
+		expectedMsg:  "Atom cannot start with a number",
+		expectedLine: 1,
 	},
 	"incomplete if": {
-		source:      "(if #t)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(if #t)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"if missing else": {
-		source:      "(if #t 1)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 9},
+		source:       "(if #t 1)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"malformed cond clause": {
-		source:      "(cond (a))",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 9},
+		source:       "(cond (a))",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"incomplete set": {
-		source:      "(set! x)",
-		expectedMsg: "Unexpected token: expected expression, got TokenRightParen",
-		expectedPos: tokenizer.Position{Line: 1, Column: 8},
+		source:       "(set! x)",
+		expectedMsg:  "Unexpected token: expected expression, got TokenRightParen",
+		expectedLine: 1,
 	},
 	"set with number": {
-		source:      "(set! 123 value)",
-		expectedMsg: "Unexpected token: expected TokenAtom, got TokenNumber",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(set! 123 value)",
+		expectedMsg:  "Unexpected token: expected TokenAtom, got TokenNumber",
+		expectedLine: 1,
 	},
 	"empty begin": {
-		source:      "(begin)",
-		expectedMsg: "begin requires at least one expression",
-		expectedPos: tokenizer.Position{Line: 1, Column: 7},
+		source:       "(begin)",
+		expectedMsg:  "begin requires at least one expression",
+		expectedLine: 1,
 	},
 }
 
@@ -871,11 +871,9 @@ func TestParseErrors(t *testing.T) {
 				t.Errorf("expected error message %q, got %q", tc.expectedMsg, parseErr.Message)
 			}
 
-			if tc.expectedPos.Line != 0 || tc.expectedPos.Column != 0 {
-				if parseErr.Position.Line != tc.expectedPos.Line || parseErr.Position.Column != tc.expectedPos.Column {
-					t.Errorf("expected error at %d:%d, got %d:%d",
-						tc.expectedPos.Line, tc.expectedPos.Column,
-						parseErr.Position.Line, parseErr.Position.Column)
+			if tc.expectedLine != 0 {
+				if parseErr.Line != tc.expectedLine {
+					t.Errorf("expected error at %d, got %d", tc.expectedLine, parseErr.Line)
 				}
 			}
 		})
@@ -1028,7 +1026,7 @@ func TestWhitespaceAndComments(t *testing.T) {
 	}
 }
 
-func TestPositions(t *testing.T) {
+func TestLineNumbers(t *testing.T) {
 	tests := map[string]struct {
 		source      string
 		expectedErr *ParseError
@@ -1036,15 +1034,15 @@ func TestPositions(t *testing.T) {
 		"error on line 2": {
 			source: "42\n(",
 			expectedErr: &ParseError{
-				Position: tokenizer.Position{Line: 2, Column: 2},
-				Message:  "Unexpected token: expected expression, got TokenEOF",
+				Line:    2,
+				Message: "Unexpected token: expected expression, got TokenEOF",
 			},
 		},
 		"error on line 3 column 5": {
 			source: "42\n(+ 1\n    (",
 			expectedErr: &ParseError{
-				Position: tokenizer.Position{Line: 3, Column: 6},
-				Message:  "Unexpected token: expected expression, got TokenEOF",
+				Line:    3,
+				Message: "Unexpected token: expected expression, got TokenEOF",
 			},
 		},
 	}
@@ -1064,11 +1062,8 @@ func TestPositions(t *testing.T) {
 				return
 			}
 
-			if parseErr.Position.Line != tc.expectedErr.Position.Line ||
-				parseErr.Position.Column != tc.expectedErr.Position.Column {
-				t.Errorf("expected position %d:%d, got %d:%d",
-					tc.expectedErr.Position.Line, tc.expectedErr.Position.Column,
-					parseErr.Position.Line, parseErr.Position.Column)
+			if parseErr.Line != tc.expectedErr.Line {
+				t.Errorf("expected position %d, got %d", tc.expectedErr.Line, parseErr.Line)
 			}
 
 			if parseErr.Message != tc.expectedErr.Message {

@@ -7,22 +7,18 @@ import (
 	"unsafe"
 )
 
-type ValueType int
+type valueType int
 
 const (
-	TypeNil ValueType = iota
-	TypeNumber
-	TypeAtom
-	TypePair
-	TypeUpvalue
-	TypeFunction
-	TypeClosure
-	TypeBuiltin
+	typeNil valueType = iota
+	typeNumber
+	typeAtom
+	typePair
+	typeUpvalue
+	typeFunction
+	typeClosure
+	typeBuiltin
 )
-
-func IsTruthy(v Value) bool {
-	return v != Nil
-}
 
 type Program struct {
 	Function *Function
@@ -39,7 +35,7 @@ func (a Atom) Value() string {
 }
 
 type Value struct {
-	typ  ValueType
+	typ  valueType
 	num  float64
 	atom Atom
 	ptr  unsafe.Pointer
@@ -52,82 +48,82 @@ func MakeNil() Value {
 }
 
 func MakeNumber(n float64) Value {
-	return Value{typ: TypeNumber, num: n}
+	return Value{typ: typeNumber, num: n}
 }
 
 func MakeAtom(s string) Value {
-	return Value{typ: TypeAtom, atom: NewAtom(s)}
+	return Value{typ: typeAtom, atom: NewAtom(s)}
 }
 
 func MakePair(p *Pair) Value {
-	return Value{typ: TypePair, ptr: unsafe.Pointer(p)}
+	return Value{typ: typePair, ptr: unsafe.Pointer(p)}
 }
 
 func MakeFunction(f *Function) Value {
-	return Value{typ: TypeFunction, ptr: unsafe.Pointer(f)}
+	return Value{typ: typeFunction, ptr: unsafe.Pointer(f)}
 }
 
 func MakeClosure(c *Closure) Value {
-	return Value{typ: TypeClosure, ptr: unsafe.Pointer(c)}
+	return Value{typ: typeClosure, ptr: unsafe.Pointer(c)}
 }
 
 func MakeBuiltin(b *Builtin) Value {
-	return Value{typ: TypeBuiltin, ptr: unsafe.Pointer(b)}
+	return Value{typ: typeBuiltin, ptr: unsafe.Pointer(b)}
 }
 
 // Type checks
 
-func (v Value) IsNil() bool    { return v.typ == TypeNil }
-func (v Value) IsNumber() bool { return v.typ == TypeNumber }
-func (v Value) IsAtom() bool   { return v.typ == TypeAtom }
-func (v Value) IsPair() bool   { return v.typ == TypePair }
+func (v Value) IsNil() bool    { return v.typ == typeNil }
+func (v Value) IsNumber() bool { return v.typ == typeNumber }
+func (v Value) IsAtom() bool   { return v.typ == typeAtom }
+func (v Value) IsPair() bool   { return v.typ == typePair }
 
 // Type casts
 
 func (v Value) AsNumber() (float64, bool) {
-	if v.typ != TypeNumber {
+	if v.typ != typeNumber {
 		return 0, false
 	}
 	return v.num, true
 }
 
 func (v Value) AsAtom() (Atom, bool) {
-	if v.typ != TypeAtom {
+	if v.typ != typeAtom {
 		return EmptyAtom, false
 	}
 	return v.atom, true
 }
 
 func (v Value) AsPair() (*Pair, bool) {
-	if v.typ != TypePair {
+	if v.typ != typePair {
 		return nil, false
 	}
 	return (*Pair)(v.ptr), true
 }
 
 func (v Value) AsUpvalue() (*Upvalue, bool) {
-	if v.typ != TypeUpvalue {
+	if v.typ != typeUpvalue {
 		return nil, false
 	}
 	return (*Upvalue)(v.ptr), true
 }
 
 func (v Value) AsFunction() (*Function, bool) {
-	if v.typ != TypeFunction {
+	if v.typ != typeFunction {
 		return nil, false
 	}
 	return (*Function)(v.ptr), true
 }
 
 func (v Value) AsClosure() (*Closure, bool) {
-	if v.typ != TypeClosure {
+	if v.typ != typeClosure {
 		return nil, false
 	}
 	return (*Closure)(v.ptr), true
 }
 
 func (v Value) AsBuiltin() (*Builtin, bool) {
-	if v.typ != TypeBuiltin {
+	if v.typ != typeBuiltin {
 		return nil, false
 	}
 	return (*Builtin)(v.ptr), true
@@ -138,6 +134,10 @@ var (
 	Nil       = MakeNil()
 	True      = MakeAtom("#t")
 )
+
+func IsTruthy(v Value) bool {
+	return v != Nil
+}
 
 func Cons(car, cdr Value) Value {
 	return MakePair(&Pair{car, cdr})
@@ -180,21 +180,21 @@ type Builtin struct {
 
 func (v Value) String() string {
 	switch v.typ {
-	case TypeNil:
+	case typeNil:
 		return "()"
-	case TypeNumber:
+	case typeNumber:
 		return fmt.Sprintf("%g", v.num)
-	case TypeAtom:
+	case typeAtom:
 		return v.atom.Value()
-	case TypePair:
+	case typePair:
 		return (*Pair)(v.ptr).String()
-	case TypeClosure:
+	case typeClosure:
 		c := (*Closure)(v.ptr)
 		if c.Function.Name == EmptyAtom {
 			return "<lambda closure>"
 		}
 		return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
-	case TypeBuiltin:
+	case typeBuiltin:
 		b := (*Builtin)(v.ptr)
 		return fmt.Sprintf("<builtin %s>", b.Name.Value())
 	default:
@@ -223,39 +223,18 @@ func (p *Pair) String() string {
 	return sb.String()
 }
 
-func (u *Upvalue) String() string {
-	if u.IsClosed {
-		return fmt.Sprintf("<closed upvalue: %s>", u.ClosedVal)
-	}
-	return fmt.Sprintf("<open upvalue: %d>", u.Index)
-}
-
-func (f *Function) String() string {
-	if f.Name == EmptyAtom {
-		return "<lambda>"
-	}
-	return fmt.Sprintf("<function %s>", f.Name.Value())
-}
-
-func (c *Closure) String() string {
-	if c.Function.Name == EmptyAtom {
-		return "<lambda closure>"
-	}
-	return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
-}
-
 func (v Value) Equal(other Value) bool {
 	if v.typ != other.typ {
 		return false
 	}
 	switch v.typ {
-	case TypeNil:
+	case typeNil:
 		return true
-	case TypeNumber:
+	case typeNumber:
 		return v.num == other.num
-	case TypeAtom:
+	case typeAtom:
 		return v.atom == other.atom
-	case TypePair:
+	case typePair:
 		p1 := (*Pair)(v.ptr)
 		p2 := (*Pair)(other.ptr)
 		return p1.Car.Equal(p2.Car) && p1.Cdr.Equal(p2.Cdr)
