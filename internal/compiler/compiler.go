@@ -18,17 +18,12 @@ func (e *CompileError) Error() string {
 	return e.Message
 }
 
-type Local struct {
-	Name       string
-	Depth      int
-	IsCaptured bool
-}
+type Local string
 
 type Compiler struct {
-	parent     *Compiler         // The enclosing compiler, if any.
-	function   *runtime.Function // The function currently being compiled.
-	locals     []Local           // Local variables of the function.
-	scopeDepth int               // The nesting level of the function's local variables, 0 being the global scope.
+	parent   *Compiler         // The enclosing compiler, if any.
+	function *runtime.Function // The function currently being compiled.
+	locals   []Local           // Local variables of the function.
 }
 
 func Compile(name string, program *ast.Program) (prog *runtime.Program, err error) {
@@ -51,7 +46,7 @@ func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
 	}
 }
 
-func (c *Compiler) errorf(format string, args ...any) error {
+func errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
 	return &CompileError{message}
 }
@@ -61,8 +56,8 @@ func (c *Compiler) emit1(code runtime.OpCode, token tokenizer.Token) {
 }
 
 func (c *Compiler) emit2(code1, code2 runtime.OpCode, token tokenizer.Token) {
-	c.function.Chunk.Write(code1, token.Line)
-	c.function.Chunk.Write(code2, token.Line)
+	c.emit1(code1, token)
+	c.emit1(code2, token)
 }
 
 func (c *Compiler) emitJump(code runtime.OpCode, token tokenizer.Token) int {
@@ -80,14 +75,9 @@ func (c *Compiler) end(node ast.Node) *runtime.Function {
 	return c.function
 }
 
-func (c *Compiler) beginScope() {
-	c.scopeDepth++
-}
-
-// TODO: Use errorf here?
 func opcodeInt(n int) runtime.OpCode {
 	if n < runtime.OpCodeMin || runtime.OpCodeMax < n {
-		panic(&CompileError{fmt.Sprintf("program too large: constant/local index or a jump offset %d is out of bounds", n)})
+		panic(errorf("program too large: constant/local index or a jump offset %d is out of bounds", n))
 	}
 	return runtime.OpCode(n)
 }
@@ -103,8 +93,7 @@ func (c *Compiler) addConstant(constant runtime.Value) int {
 }
 
 func (c *Compiler) addLocal(name string) int {
-	local := Local{Name: name, Depth: c.scopeDepth}
-	c.locals = append(c.locals, local)
+	c.locals = append(c.locals, Local(name))
 	return len(c.locals) - 1
 }
 
@@ -120,7 +109,7 @@ func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
 
 func (c *Compiler) resolveLocal(name string) (int, bool) {
 	for i, local := range slices.Backward(c.locals) {
-		if local.Name == name {
+		if string(local) == name {
 			return i, true
 		}
 	}
@@ -132,7 +121,6 @@ func (c *Compiler) resolveUpvalue(name string) (int, bool) {
 		return -1, false
 	}
 	if idx, ok := c.parent.resolveLocal(name); ok {
-		c.parent.locals[idx].IsCaptured = true
 		return c.addUpvalue(idx, true), true
 	}
 	if idx, ok := c.parent.resolveUpvalue(name); ok {
@@ -171,7 +159,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 		c.emit2(runtime.OpDefineGlobal, opcodeInt(idx), ast.Token(n))
 		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Let:
-		panic(c.errorf("unexpanded let expression"))
+		panic(errorf("unexpanded let expression"))
 	case *ast.If:
 		c.compileIf(n, tailPosition)
 	case *ast.Cond:
@@ -185,7 +173,7 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Begin:
 		c.compileBegin(n, tailPosition)
 	default:
-		panic(c.errorf("unrecognized expression type: %v", node))
+		panic(errorf("unrecognized expression type: %v", node))
 	}
 }
 
@@ -244,7 +232,7 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 	case *ast.Define:
 		return runtime.Cons(runtime.MakeAtom("define"), runtime.Cons(runtime.MakeAtom(n.Name), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
 	case *ast.Let:
-		panic(c.errorf("unexpanded let expression"))
+		panic(errorf("unexpanded let expression"))
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
@@ -280,7 +268,7 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 		}
 		return runtime.Cons(runtime.MakeAtom("begin"), exprs)
 	default:
-		panic(c.errorf("unexpected quoted expression type: %v", node))
+		panic(errorf("unexpected quoted expression type: %v", node))
 	}
 }
 
@@ -298,9 +286,6 @@ func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 
 func (c *Compiler) compileFunction(f *ast.Function) {
 	compiler := newCompiler(c, f.Name, len(f.Params))
-	// We don't need to end the scope here, because once a function compilation
-	// has finished, we end the entire compiler responsible.
-	compiler.beginScope()
 	for _, param := range f.Params {
 		compiler.addLocal(param)
 	}
