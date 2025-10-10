@@ -3,21 +3,23 @@ package compiler
 import (
 	"fmt"
 	"io"
+
+	"tomaskala.com/glisp/internal/runtime"
 )
 
 type Disassembler struct {
-	chunk  Chunk
+	chunk  runtime.Chunk
 	w      io.Writer
 	ip     int
 	opAddr int
 }
 
-func (p *Program) Disassemble(w io.Writer) {
+func Disassemble(p *runtime.Program, w io.Writer) {
 	d := &Disassembler{chunk: p.Function.Chunk, w: w}
 	d.disassemble("")
 }
 
-func (d *Disassembler) readOpCode() OpCode {
+func (d *Disassembler) readOpCode() runtime.OpCode {
 	op := d.chunk.Code[d.ip]
 	d.ip++
 	return op
@@ -39,65 +41,65 @@ func (d *Disassembler) disassemble(prefix string) {
 	for d.ip < len(d.chunk.Code) {
 		d.opAddr = d.ip
 		switch op := d.readOpCode(); op {
-		case OpConstant:
+		case runtime.OpConstant:
 			idx := int(d.readOpCode())
 			constant := d.chunk.Constants[idx]
 			d.writeOpf("Constant %v (%d)", constant, idx)
-		case OpNil:
+		case runtime.OpNil:
 			d.writeOpf("Nil")
-		case OpCall:
+		case runtime.OpCall:
 			argCount := int(d.readOpCode())
 			d.writeOpf("Call/%d", argCount)
-		case OpTailCall:
+		case runtime.OpTailCall:
 			argCount := int(d.readOpCode())
 			d.writeOpf("TailCall/%d", argCount)
-		case OpCallBuiltin:
+		case runtime.OpCallBuiltin:
 			builtin := d.readOpCode()
 			d.writeOpf("CallBuiltin (%d)", builtin)
-			d.disassembleBuiltin(Builtin(builtin))
-		case OpReturn:
+			d.disassembleBuiltin(runtime.Builtin(builtin))
+		case runtime.OpReturn:
 			d.writeOpf("Return")
-		case OpGetLocal:
+		case runtime.OpGetLocal:
 			idx := int(d.readOpCode())
 			d.writeOpf("GetLocal (%d)", idx)
-		case OpSetLocal:
+		case runtime.OpSetLocal:
 			idx := int(d.readOpCode())
 			d.writeOpf("SetLocal (%d)", idx)
-		case OpGetUpvalue:
+		case runtime.OpGetUpvalue:
 			idx := int(d.readOpCode())
 			d.writeOpf("GetUpvalue (%d)", idx)
-		case OpSetUpvalue:
+		case runtime.OpSetUpvalue:
 			idx := int(d.readOpCode())
 			d.writeOpf("SetUpvalue (%d)", idx)
-		case OpGetGlobal:
+		case runtime.OpGetGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
 			d.writeOpf("GetGlobal %s (%d)", atom.Value(), idx)
-		case OpDefineGlobal:
+		case runtime.OpDefineGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
 			d.writeOpf("DefineGlobal %s (%d)", atom.Value(), idx)
-		case OpSetGlobal:
+		case runtime.OpSetGlobal:
 			idx := int(d.readOpCode())
 			atom, _ := d.chunk.Constants[idx].AsAtom()
 			d.writeOpf("SetGlobal %s (%d)", atom.Value(), idx)
-		case OpClosure:
+		case runtime.OpClosure:
 			idx := int(d.readOpCode())
 			function, _ := d.chunk.Constants[idx].AsFunction()
 			d.writeOpf("Closure %v (%d)", function, idx)
 			funcD := &Disassembler{chunk: function.Chunk, w: d.w}
 			funcD.disassemble(function.Name.Value())
-		case OpPop:
+		case runtime.OpPop:
 			d.writeOpf("Pop")
-		case OpJump:
+		case runtime.OpJump:
 			offset := int(d.readOpCode())
 			target := d.ip + offset
 			d.writeOpf("Jump -> %04x (offset %d)", target, offset)
-		case OpJumpIfFalse:
+		case runtime.OpJumpIfFalse:
 			offset := int(d.readOpCode())
 			target := d.ip + offset
 			d.writeOpf("JumpIfFalse -> %04x (offset %d)", target, offset)
-		case OpJumpIfTrue:
+		case runtime.OpJumpIfTrue:
 			offset := int(d.readOpCode())
 			target := d.ip + offset
 			d.writeOpf("JumpIfTrue -> %04x (offset %d)", target, offset)
@@ -110,48 +112,48 @@ func (d *Disassembler) disassemble(prefix string) {
 	}
 }
 
-func (d *Disassembler) disassembleBuiltin(builtin Builtin) {
+func (d *Disassembler) disassembleBuiltin(builtin runtime.Builtin) {
 	argCount := int(d.readOpCode())
 	switch builtin {
-	case BuiltinCons:
+	case runtime.BuiltinCons:
 		d.writeOpf("Cons/%d", argCount)
-	case BuiltinCar:
+	case runtime.BuiltinCar:
 		d.writeOpf("Car/%d", argCount)
-	case BuiltinCdr:
+	case runtime.BuiltinCdr:
 		d.writeOpf("Cdr/%d", argCount)
-	case BuiltinAdd:
+	case runtime.BuiltinAdd:
 		d.writeOpf("Add/%d", argCount)
-	case BuiltinSub:
+	case runtime.BuiltinSub:
 		d.writeOpf("Sub/%d", argCount)
-	case BuiltinMul:
+	case runtime.BuiltinMul:
 		d.writeOpf("Mul/%d", argCount)
-	case BuiltinDiv:
+	case runtime.BuiltinDiv:
 		d.writeOpf("Div/%d", argCount)
-	case BuiltinNumEq:
+	case runtime.BuiltinNumEq:
 		d.writeOpf("NumEq/%d", argCount)
-	case BuiltinNumLt:
+	case runtime.BuiltinNumLt:
 		d.writeOpf("NumLt/%d", argCount)
-	case BuiltinNumLte:
+	case runtime.BuiltinNumLte:
 		d.writeOpf("NumLte/%d", argCount)
-	case BuiltinNumGt:
+	case runtime.BuiltinNumGt:
 		d.writeOpf("NumGt/%d", argCount)
-	case BuiltinNumGte:
+	case runtime.BuiltinNumGte:
 		d.writeOpf("NumGte/%d", argCount)
-	case BuiltinEq:
+	case runtime.BuiltinEq:
 		d.writeOpf("Eq/%d", argCount)
-	case BuiltinIsAtom:
+	case runtime.BuiltinIsAtom:
 		d.writeOpf("IsAtom/%d", argCount)
-	case BuiltinIsNil:
+	case runtime.BuiltinIsNil:
 		d.writeOpf("IsNil/%d", argCount)
-	case BuiltinIsPair:
+	case runtime.BuiltinIsPair:
 		d.writeOpf("IsPair/%d", argCount)
-	case BuiltinSetCar:
+	case runtime.BuiltinSetCar:
 		d.writeOpf("SetCar/%d", argCount)
-	case BuiltinSetCdr:
+	case runtime.BuiltinSetCdr:
 		d.writeOpf("SetCdr/%d", argCount)
-	case BuiltinDisplay:
+	case runtime.BuiltinDisplay:
 		d.writeOpf("Display/%d", argCount)
-	case BuiltinNewline:
+	case runtime.BuiltinNewline:
 		d.writeOpf("Newline/%d", argCount)
 	default:
 		panic(fmt.Sprintf("Unknown builtin: %v", builtin))

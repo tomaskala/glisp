@@ -6,9 +6,10 @@ import (
 
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/parser"
+	"tomaskala.com/glisp/internal/runtime"
 )
 
-func evalExpr(t *testing.T, source string) compiler.Value {
+func evalExpr(t *testing.T, source string) runtime.Value {
 	t.Helper()
 
 	program, err := parser.Parse("test", source)

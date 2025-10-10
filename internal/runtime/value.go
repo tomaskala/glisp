@@ -1,4 +1,4 @@
-package compiler
+package runtime
 
 import (
 	"fmt"
@@ -18,6 +18,10 @@ const (
 	TypeFunction
 	TypeClosure
 )
+
+type Program struct {
+	Function *Function
+}
 
 type Atom unique.Handle[string]
 
@@ -140,6 +144,11 @@ type Function struct {
 	HasRestParam bool
 	Chunk        Chunk
 	Upvalues     []UpvalueSpec
+}
+
+type UpvalueSpec struct {
+	Index   int  // Captured value index.
+	IsLocal bool // true: capture parent's local at Index; false: capture parent's upvalue at Index.
 }
 
 type Closure struct {

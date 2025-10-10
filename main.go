@@ -109,7 +109,7 @@ func runRepl() int {
 		}
 
 		if *disassemble {
-			compiledProgram.Disassemble(rl.Stderr())
+			compiler.Disassemble(compiledProgram, rl.Stderr())
 		}
 
 		result, err := evaluator.Run(compiledProgram)
@@ -143,7 +143,7 @@ func runScript(path string) int {
 	}
 
 	if *disassemble {
-		compiledProgram.Disassemble(os.Stderr)
+		compiler.Disassemble(compiledProgram, os.Stderr)
 	}
 
 	evaluator := vm.NewVM()

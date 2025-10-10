@@ -6,6 +6,7 @@ import (
 
 	"tomaskala.com/glisp/internal/ast"
 	"tomaskala.com/glisp/internal/expander"
+	"tomaskala.com/glisp/internal/runtime"
 	"tomaskala.com/glisp/internal/tokenizer"
 )
 
@@ -17,29 +18,20 @@ func (e *CompileError) Error() string {
 	return e.Message
 }
 
-type Program struct {
-	Function *Function
-}
-
 type Local struct {
 	Name       string
 	Depth      int
 	IsCaptured bool
 }
 
-type UpvalueSpec struct {
-	Index   int  // Captured value index.
-	IsLocal bool // true: capture parent's local at Index; false: capture parent's upvalue at Index.
-}
-
 type Compiler struct {
-	parent     *Compiler // The enclosing compiler, if any.
-	function   *Function // The function currently being compiled.
-	locals     []Local   // Local variables of the function.
-	scopeDepth int       // The nesting level of the function's local variables, 0 being the global scope.
+	parent     *Compiler         // The enclosing compiler, if any.
+	function   *runtime.Function // The function currently being compiled.
+	locals     []Local           // Local variables of the function.
+	scopeDepth int               // The nesting level of the function's local variables, 0 being the global scope.
 }
 
-func Compile(name string, program *ast.Program) (prog *Program, err error) {
+func Compile(name string, program *ast.Program) (prog *runtime.Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(*CompileError)
@@ -49,13 +41,13 @@ func Compile(name string, program *ast.Program) (prog *Program, err error) {
 	compiler := newCompiler(nil, name, 0)
 	compiler.compileExpr(expandedProgram, false)
 	topLevel := compiler.end(program)
-	return &Program{topLevel}, err
+	return &runtime.Program{Function: topLevel}, err
 }
 
 func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
 	return &Compiler{
 		parent:   parent,
-		function: &Function{Name: NewAtom(name), Arity: funcArity},
+		function: &runtime.Function{Name: runtime.NewAtom(name), Arity: funcArity},
 	}
 }
 
@@ -64,17 +56,17 @@ func (c *Compiler) errorf(format string, args ...any) error {
 	return &CompileError{message}
 }
 
-func (c *Compiler) emit1(code OpCode, token tokenizer.Token) {
-	c.function.Chunk.write(code, token.Pos.Line)
+func (c *Compiler) emit1(code runtime.OpCode, token tokenizer.Token) {
+	c.function.Chunk.Write(code, token.Pos.Line)
 }
 
-func (c *Compiler) emit2(code1, code2 OpCode, token tokenizer.Token) {
-	c.function.Chunk.write(code1, token.Pos.Line)
-	c.function.Chunk.write(code2, token.Pos.Line)
+func (c *Compiler) emit2(code1, code2 runtime.OpCode, token tokenizer.Token) {
+	c.function.Chunk.Write(code1, token.Pos.Line)
+	c.function.Chunk.Write(code2, token.Pos.Line)
 }
 
-func (c *Compiler) emitJump(code OpCode, token tokenizer.Token) int {
-	c.emit2(code, opcodeInt(OpCodeMax), token)
+func (c *Compiler) emitJump(code runtime.OpCode, token tokenizer.Token) int {
+	c.emit2(code, opcodeInt(runtime.OpCodeMax), token)
 	return len(c.function.Chunk.Code) - 1
 }
 
@@ -83,8 +75,8 @@ func (c *Compiler) patchJump(offset int) {
 	c.function.Chunk.Code[offset] = opcodeInt(jump)
 }
 
-func (c *Compiler) end(node ast.Node) *Function {
-	c.emit1(OpReturn, ast.Token(node))
+func (c *Compiler) end(node ast.Node) *runtime.Function {
+	c.emit1(runtime.OpReturn, ast.Token(node))
 	return c.function
 }
 
@@ -93,21 +85,21 @@ func (c *Compiler) beginScope() {
 }
 
 // TODO: Use errorf here?
-func opcodeInt(n int) OpCode {
-	if n < OpCodeMin || OpCodeMax < n {
+func opcodeInt(n int) runtime.OpCode {
+	if n < runtime.OpCodeMin || runtime.OpCodeMax < n {
 		panic(&CompileError{fmt.Sprintf("program too large: constant/local index or a jump offset %d is out of bounds", n)})
 	}
-	return OpCode(n)
+	return runtime.OpCode(n)
 }
 
-func (c *Compiler) addConstant(constant Value) int {
+func (c *Compiler) addConstant(constant runtime.Value) int {
 	// Constant deduplication.
 	for i, c := range c.function.Chunk.Constants {
 		if c.Equal(constant) {
 			return i
 		}
 	}
-	return c.function.Chunk.addConstant(constant)
+	return c.function.Chunk.AddConstant(constant)
 }
 
 func (c *Compiler) addLocal(name string) int {
@@ -122,7 +114,7 @@ func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
 			return i
 		}
 	}
-	c.function.Upvalues = append(c.function.Upvalues, UpvalueSpec{idx, isLocal})
+	c.function.Upvalues = append(c.function.Upvalues, runtime.UpvalueSpec{Index: idx, IsLocal: isLocal})
 	return len(c.function.Upvalues) - 1
 }
 
@@ -154,30 +146,30 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Program:
 		c.compileProgram(n)
 	case *ast.Nil:
-		c.emit1(OpNil, ast.Token(n))
+		c.emit1(runtime.OpNil, ast.Token(n))
 	case *ast.Atom:
 		c.compileAtom(n)
 	case *ast.Number:
-		val := MakeNumber(n.Value)
+		val := runtime.MakeNumber(n.Value)
 		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
+		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Quote:
 		if _, ok := n.Value.(*ast.Nil); ok {
-			c.emit1(OpNil, ast.Token(n))
+			c.emit1(runtime.OpNil, ast.Token(n))
 			return
 		}
 		val := c.compileQuoted(n.Value)
 		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
+		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Call:
 		c.compileCall(n, tailPosition)
 	case *ast.Function:
 		c.compileFunction(n)
 	case *ast.Define:
 		c.compileExpr(n.Value, false)
-		idx := c.addConstant(MakeAtom(n.Name))
-		c.emit2(OpDefineGlobal, opcodeInt(idx), ast.Token(n))
-		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
+		idx := c.addConstant(runtime.MakeAtom(n.Name))
+		c.emit2(runtime.OpDefineGlobal, opcodeInt(idx), ast.Token(n))
+		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Let:
 		panic(c.errorf("unexpanded let expression"))
 	case *ast.If:
@@ -202,91 +194,91 @@ func (c *Compiler) compileProgram(program *ast.Program) {
 		c.compileExpr(expr, false)
 		// Pop all intermediate values except for the last one - REPL friendly.
 		if i < len(program.Exprs)-1 {
-			c.emit1(OpPop, ast.Token(expr))
+			c.emit1(runtime.OpPop, ast.Token(expr))
 		}
 	}
 	// Handle empty programs.
 	if len(program.Exprs) == 0 {
-		c.emit1(OpNil, ast.Token(program))
+		c.emit1(runtime.OpNil, ast.Token(program))
 	}
 }
 
 func (c *Compiler) compileAtom(atom *ast.Atom) {
 	if idx, ok := c.resolveLocal(atom.Name); ok {
-		c.emit2(OpGetLocal, opcodeInt(idx), ast.Token(atom))
+		c.emit2(runtime.OpGetLocal, opcodeInt(idx), ast.Token(atom))
 		return
 	}
 	if idx, ok := c.resolveUpvalue(atom.Name); ok {
-		c.emit2(OpGetUpvalue, opcodeInt(idx), ast.Token(atom))
+		c.emit2(runtime.OpGetUpvalue, opcodeInt(idx), ast.Token(atom))
 		return
 	}
-	idx := c.addConstant(MakeAtom(atom.Name))
-	c.emit2(OpGetGlobal, opcodeInt(idx), ast.Token(atom))
+	idx := c.addConstant(runtime.MakeAtom(atom.Name))
+	c.emit2(runtime.OpGetGlobal, opcodeInt(idx), ast.Token(atom))
 }
 
-func (c *Compiler) compileQuoted(node ast.Node) Value {
-	// Quoted Nil is handled outside of this function so that we can emit OpConstant
+func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
+	// Quoted Nil is handled outside of this function so that we can emit runtime.OpConstant
 	// with this function's result.
 	switch n := node.(type) {
 	case *ast.Atom:
-		return MakeAtom(n.Name)
+		return runtime.MakeAtom(n.Name)
 	case *ast.Number:
-		return MakeNumber(n.Value)
+		return runtime.MakeNumber(n.Value)
 	case *ast.Quote:
 		return c.compileQuoted(n.Value)
 	case *ast.Call:
-		var cons Value = Nil
+		var cons runtime.Value = runtime.Nil
 		for _, arg := range slices.Backward(n.Args) {
-			cons = Cons(c.compileQuoted(arg), cons)
+			cons = runtime.Cons(c.compileQuoted(arg), cons)
 		}
-		return Cons(c.compileQuoted(n.Func), cons)
+		return runtime.Cons(c.compileQuoted(n.Func), cons)
 	case *ast.Function:
-		var params Value = Nil
+		var params runtime.Value = runtime.Nil
 		if n.RestParam != "" {
-			params = MakeAtom(n.RestParam)
+			params = runtime.MakeAtom(n.RestParam)
 		}
 		for _, param := range slices.Backward(n.Params) {
-			params = Cons(MakeAtom(param), params)
+			params = runtime.Cons(runtime.MakeAtom(param), params)
 		}
-		return Cons(MakeAtom("lambda"), Cons(params, Cons(c.compileQuoted(n.Body), Nil)))
+		return runtime.Cons(runtime.MakeAtom("lambda"), runtime.Cons(params, runtime.Cons(c.compileQuoted(n.Body), runtime.Nil)))
 	case *ast.Define:
-		return Cons(MakeAtom("define"), Cons(MakeAtom(n.Name), Cons(c.compileQuoted(n.Value), Nil)))
+		return runtime.Cons(runtime.MakeAtom("define"), runtime.Cons(runtime.MakeAtom(n.Name), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
 	case *ast.Let:
 		panic(c.errorf("unexpanded let expression"))
 	case *ast.If:
 		cond := c.compileQuoted(n.Cond)
 		thenBranch := c.compileQuoted(n.Then)
 		elseBranch := c.compileQuoted(n.Else)
-		return Cons(MakeAtom("if"), Cons(cond, Cons(thenBranch, Cons(elseBranch, Nil))))
+		return runtime.Cons(runtime.MakeAtom("if"), runtime.Cons(cond, runtime.Cons(thenBranch, runtime.Cons(elseBranch, runtime.Nil))))
 	case *ast.Cond:
-		var clauses Value = Nil
+		var clauses runtime.Value = runtime.Nil
 		for _, cl := range slices.Backward(n.Clauses) {
 			cond := c.compileQuoted(cl.Cond)
 			value := c.compileQuoted(cl.Value)
-			clause := Cons(cond, Cons(value, Nil))
-			clauses = Cons(clause, clauses)
+			clause := runtime.Cons(cond, runtime.Cons(value, runtime.Nil))
+			clauses = runtime.Cons(clause, clauses)
 		}
-		return Cons(MakeAtom("cond"), clauses)
+		return runtime.Cons(runtime.MakeAtom("cond"), clauses)
 	case *ast.And:
-		var exprs Value = Nil
+		var exprs runtime.Value = runtime.Nil
 		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = Cons(c.compileQuoted(expr), exprs)
+			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(MakeAtom("and"), exprs)
+		return runtime.Cons(runtime.MakeAtom("and"), exprs)
 	case *ast.Or:
-		var exprs Value = Nil
+		var exprs runtime.Value = runtime.Nil
 		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = Cons(c.compileQuoted(expr), exprs)
+			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(MakeAtom("or"), exprs)
+		return runtime.Cons(runtime.MakeAtom("or"), exprs)
 	case *ast.Set:
-		return Cons(MakeAtom("set!"), Cons(MakeAtom(n.Variable), Cons(c.compileQuoted(n.Value), Nil)))
+		return runtime.Cons(runtime.MakeAtom("set!"), runtime.Cons(runtime.MakeAtom(n.Variable), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
 	case *ast.Begin:
-		var exprs Value = Cons(c.compileQuoted(n.Tail), Nil)
+		var exprs runtime.Value = runtime.Cons(c.compileQuoted(n.Tail), runtime.Nil)
 		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = Cons(c.compileQuoted(expr), exprs)
+			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
 		}
-		return Cons(MakeAtom("begin"), exprs)
+		return runtime.Cons(runtime.MakeAtom("begin"), exprs)
 	default:
 		panic(c.errorf("unexpected quoted expression type: %v", node))
 	}
@@ -294,32 +286,32 @@ func (c *Compiler) compileQuoted(node ast.Node) Value {
 
 type builtinFunc struct {
 	name  string
-	kind  Builtin
+	kind  runtime.Builtin
 	arity int
 }
 
 var builtins map[string]builtinFunc = map[string]builtinFunc{
-	"cons":     {"cons", BuiltinCons, 2},
-	"car":      {"car", BuiltinCar, 1},
-	"cdr":      {"cdr", BuiltinCdr, 1},
-	"+":        {"+", BuiltinAdd, -1},
-	"-":        {"-", BuiltinSub, -1},
-	"*":        {"*", BuiltinMul, -1},
-	"/":        {"/", BuiltinDiv, -1},
-	"=":        {"=", BuiltinNumEq, 2},
-	"<":        {"<", BuiltinNumLt, 2},
-	"<=":       {"<=", BuiltinNumLte, 2},
-	">":        {">", BuiltinNumGt, 2},
-	">=":       {">=", BuiltinNumGte, 2},
-	"eq?":      {"eq?", BuiltinEq, 2},
-	"atom?":    {"atom?", BuiltinIsAtom, 1},
-	"nil?":     {"nil?", BuiltinIsNil, 1},
-	"pair?":    {"pair?", BuiltinIsPair, 1},
-	"not":      {"not", BuiltinIsNil, 1},
-	"set-car!": {"set-car!", BuiltinSetCar, 2},
-	"set-cdr!": {"set-cdr!", BuiltinSetCdr, 2},
-	"display":  {"display", BuiltinDisplay, 1},
-	"newline":  {"newline", BuiltinNewline, 0},
+	"cons":     {"cons", runtime.BuiltinCons, 2},
+	"car":      {"car", runtime.BuiltinCar, 1},
+	"cdr":      {"cdr", runtime.BuiltinCdr, 1},
+	"+":        {"+", runtime.BuiltinAdd, -1},
+	"-":        {"-", runtime.BuiltinSub, -1},
+	"*":        {"*", runtime.BuiltinMul, -1},
+	"/":        {"/", runtime.BuiltinDiv, -1},
+	"=":        {"=", runtime.BuiltinNumEq, 2},
+	"<":        {"<", runtime.BuiltinNumLt, 2},
+	"<=":       {"<=", runtime.BuiltinNumLte, 2},
+	">":        {">", runtime.BuiltinNumGt, 2},
+	">=":       {">=", runtime.BuiltinNumGte, 2},
+	"eq?":      {"eq?", runtime.BuiltinEq, 2},
+	"atom?":    {"atom?", runtime.BuiltinIsAtom, 1},
+	"nil?":     {"nil?", runtime.BuiltinIsNil, 1},
+	"pair?":    {"pair?", runtime.BuiltinIsPair, 1},
+	"not":      {"not", runtime.BuiltinIsNil, 1},
+	"set-car!": {"set-car!", runtime.BuiltinSetCar, 2},
+	"set-cdr!": {"set-cdr!", runtime.BuiltinSetCdr, 2},
+	"display":  {"display", runtime.BuiltinDisplay, 1},
+	"newline":  {"newline", runtime.BuiltinNewline, 0},
 }
 
 func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
@@ -333,12 +325,12 @@ func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 		c.compileExpr(a, false)
 	}
 	if builtinFound {
-		c.emit1(OpCallBuiltin, ast.Token(call))
-		c.emit2(OpCode(builtin.kind), opcodeInt(len(call.Args)), ast.Token(call))
+		c.emit1(runtime.OpCallBuiltin, ast.Token(call))
+		c.emit2(runtime.OpCode(builtin.kind), opcodeInt(len(call.Args)), ast.Token(call))
 	} else if tailPosition {
-		c.emit2(OpTailCall, opcodeInt(len(call.Args)), ast.Token(call))
+		c.emit2(runtime.OpTailCall, opcodeInt(len(call.Args)), ast.Token(call))
 	} else {
-		c.emit2(OpCall, opcodeInt(len(call.Args)), ast.Token(call))
+		c.emit2(runtime.OpCall, opcodeInt(len(call.Args)), ast.Token(call))
 	}
 }
 
@@ -374,39 +366,39 @@ func (c *Compiler) compileFunction(f *ast.Function) {
 	}
 	compiler.compileExpr(f.Body, true)
 	function := compiler.end(f)
-	idx := c.addConstant(MakeFunction(function))
-	c.emit2(OpClosure, opcodeInt(idx), ast.Token(f))
+	idx := c.addConstant(runtime.MakeFunction(function))
+	c.emit2(runtime.OpClosure, opcodeInt(idx), ast.Token(f))
 }
 
 func (c *Compiler) compileIf(i *ast.If, tailPosition bool) {
 	c.compileExpr(i.Cond, false)
-	thenJump := c.emitJump(OpJumpIfFalse, ast.Token(i))
-	c.emit1(OpPop, ast.Token(i))
+	thenJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(i))
+	c.emit1(runtime.OpPop, ast.Token(i))
 	c.compileExpr(i.Then, tailPosition)
-	elseJump := c.emitJump(OpJump, ast.Token(i))
+	elseJump := c.emitJump(runtime.OpJump, ast.Token(i))
 	c.patchJump(thenJump)
-	c.emit1(OpPop, ast.Token(i))
+	c.emit1(runtime.OpPop, ast.Token(i))
 	c.compileExpr(i.Else, tailPosition)
 	c.patchJump(elseJump)
 }
 
 func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
 	if len(cond.Clauses) == 0 {
-		c.emit1(OpNil, ast.Token(cond))
+		c.emit1(runtime.OpNil, ast.Token(cond))
 		return
 	}
 	var endJumps []int
 	for _, clause := range cond.Clauses {
 		c.compileExpr(clause.Cond, false)
-		nextJump := c.emitJump(OpJumpIfFalse, ast.Token(clause.Cond))
-		c.emit1(OpPop, ast.Token(clause.Cond))
+		nextJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(clause.Cond))
+		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
 		c.compileExpr(clause.Value, tailPosition)
-		endJump := c.emitJump(OpJump, ast.Token(clause.Value))
+		endJump := c.emitJump(runtime.OpJump, ast.Token(clause.Value))
 		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
-		c.emit1(OpPop, ast.Token(clause.Cond))
+		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
 	}
-	c.emit1(OpNil, ast.Token(cond))
+	c.emit1(runtime.OpNil, ast.Token(cond))
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -414,8 +406,8 @@ func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
 
 func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 	if len(and.Exprs) == 0 {
-		idx := c.addConstant(True)
-		c.emit2(OpConstant, opcodeInt(idx), ast.Token(and))
+		idx := c.addConstant(runtime.True)
+		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(and))
 		return
 	}
 	var endJumps []int
@@ -423,9 +415,9 @@ func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 		exprTailPosition := tailPosition && i == len(and.Exprs)-1
 		c.compileExpr(expr, exprTailPosition)
 		if i < len(and.Exprs)-1 {
-			endJump := c.emitJump(OpJumpIfFalse, ast.Token(expr))
+			endJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(expr))
 			endJumps = append(endJumps, endJump)
-			c.emit1(OpPop, ast.Token(expr))
+			c.emit1(runtime.OpPop, ast.Token(expr))
 		}
 	}
 	for _, jump := range endJumps {
@@ -435,7 +427,7 @@ func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 
 func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 	if len(or.Exprs) == 0 {
-		c.emit1(OpNil, ast.Token(or))
+		c.emit1(runtime.OpNil, ast.Token(or))
 		return
 	}
 	var endJumps []int
@@ -443,9 +435,9 @@ func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 		exprTailPosition := tailPosition && i == len(or.Exprs)-1
 		c.compileExpr(expr, exprTailPosition)
 		if i < len(or.Exprs)-1 {
-			endJump := c.emitJump(OpJumpIfTrue, ast.Token(expr))
+			endJump := c.emitJump(runtime.OpJumpIfTrue, ast.Token(expr))
 			endJumps = append(endJumps, endJump)
-			c.emit1(OpPop, ast.Token(expr))
+			c.emit1(runtime.OpPop, ast.Token(expr))
 		}
 	}
 	for _, jump := range endJumps {
@@ -456,23 +448,23 @@ func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 func (c *Compiler) compileSet(set *ast.Set) {
 	if idx, ok := c.resolveLocal(set.Variable); ok {
 		c.compileExpr(set.Value, false)
-		c.emit2(OpSetLocal, opcodeInt(idx), ast.Token(set))
+		c.emit2(runtime.OpSetLocal, opcodeInt(idx), ast.Token(set))
 		return
 	}
 	if idx, ok := c.resolveUpvalue(set.Variable); ok {
 		c.compileExpr(set.Value, false)
-		c.emit2(OpSetUpvalue, opcodeInt(idx), ast.Token(set))
+		c.emit2(runtime.OpSetUpvalue, opcodeInt(idx), ast.Token(set))
 		return
 	}
-	idx := c.addConstant(MakeAtom(set.Variable))
+	idx := c.addConstant(runtime.MakeAtom(set.Variable))
 	c.compileExpr(set.Value, false)
-	c.emit2(OpSetGlobal, opcodeInt(idx), ast.Token(set))
+	c.emit2(runtime.OpSetGlobal, opcodeInt(idx), ast.Token(set))
 }
 
 func (c *Compiler) compileBegin(begin *ast.Begin, tailPosition bool) {
 	for _, expr := range begin.Exprs {
 		c.compileExpr(expr, false)
-		c.emit1(OpPop, ast.Token(begin))
+		c.emit1(runtime.OpPop, ast.Token(begin))
 	}
 	c.compileExpr(begin.Tail, tailPosition)
 }

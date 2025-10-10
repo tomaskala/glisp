@@ -1,4 +1,4 @@
-package compiler
+package runtime
 
 //go:generate stringer -output opcode_string.go -type OpCode
 
@@ -10,12 +10,12 @@ type Chunk struct {
 	Lines     []int
 }
 
-func (c *Chunk) write(code OpCode, line int) {
+func (c *Chunk) Write(code OpCode, line int) {
 	c.Code = append(c.Code, code)
 	c.Lines = append(c.Lines, line)
 }
 
-func (c *Chunk) addConstant(constant Value) int {
+func (c *Chunk) AddConstant(constant Value) int {
 	c.Constants = append(c.Constants, constant)
 	return len(c.Constants) - 1
 }
