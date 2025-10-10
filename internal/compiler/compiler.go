@@ -84,7 +84,7 @@ func (c *Compiler) patchJump(offset int) {
 }
 
 func (c *Compiler) end(node ast.Node) *Function {
-	c.emit1(OpReturn, node.Token())
+	c.emit1(OpReturn, ast.Token(node))
 	return c.function
 }
 
@@ -154,21 +154,21 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Program:
 		c.compileProgram(n)
 	case *ast.Nil:
-		c.emit1(OpNil, n.Token())
+		c.emit1(OpNil, ast.Token(n))
 	case *ast.Atom:
 		c.compileAtom(n)
 	case *ast.Number:
 		val := MakeNumber(n.Value)
 		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Quote:
 		if _, ok := n.Value.(*ast.Nil); ok {
-			c.emit1(OpNil, n.Token())
+			c.emit1(OpNil, ast.Token(n))
 			return
 		}
 		val := c.compileQuoted(n.Value)
 		idx := c.addConstant(val)
-		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Call:
 		c.compileCall(n, tailPosition)
 	case *ast.Function:
@@ -176,8 +176,8 @@ func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
 	case *ast.Define:
 		c.compileExpr(n.Value, false)
 		idx := c.addConstant(MakeAtom(n.Name))
-		c.emit2(OpDefineGlobal, opcodeInt(idx), n.Token())
-		c.emit2(OpConstant, opcodeInt(idx), n.Token())
+		c.emit2(OpDefineGlobal, opcodeInt(idx), ast.Token(n))
+		c.emit2(OpConstant, opcodeInt(idx), ast.Token(n))
 	case *ast.Let:
 		panic(c.errorf("unexpanded let expression"))
 	case *ast.If:
@@ -202,26 +202,26 @@ func (c *Compiler) compileProgram(program *ast.Program) {
 		c.compileExpr(expr, false)
 		// Pop all intermediate values except for the last one - REPL friendly.
 		if i < len(program.Exprs)-1 {
-			c.emit1(OpPop, expr.Token())
+			c.emit1(OpPop, ast.Token(expr))
 		}
 	}
 	// Handle empty programs.
 	if len(program.Exprs) == 0 {
-		c.emit1(OpNil, program.Token())
+		c.emit1(OpNil, ast.Token(program))
 	}
 }
 
 func (c *Compiler) compileAtom(atom *ast.Atom) {
 	if idx, ok := c.resolveLocal(atom.Name); ok {
-		c.emit2(OpGetLocal, opcodeInt(idx), atom.Token())
+		c.emit2(OpGetLocal, opcodeInt(idx), ast.Token(atom))
 		return
 	}
 	if idx, ok := c.resolveUpvalue(atom.Name); ok {
-		c.emit2(OpGetUpvalue, opcodeInt(idx), atom.Token())
+		c.emit2(OpGetUpvalue, opcodeInt(idx), ast.Token(atom))
 		return
 	}
 	idx := c.addConstant(MakeAtom(atom.Name))
-	c.emit2(OpGetGlobal, opcodeInt(idx), atom.Token())
+	c.emit2(OpGetGlobal, opcodeInt(idx), ast.Token(atom))
 }
 
 func (c *Compiler) compileQuoted(node ast.Node) Value {
@@ -333,12 +333,12 @@ func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
 		c.compileExpr(a, false)
 	}
 	if builtinFound {
-		c.emit1(OpCallBuiltin, call.Token())
-		c.emit2(OpCode(builtin.kind), opcodeInt(len(call.Args)), call.Token())
+		c.emit1(OpCallBuiltin, ast.Token(call))
+		c.emit2(OpCode(builtin.kind), opcodeInt(len(call.Args)), ast.Token(call))
 	} else if tailPosition {
-		c.emit2(OpTailCall, opcodeInt(len(call.Args)), call.Token())
+		c.emit2(OpTailCall, opcodeInt(len(call.Args)), ast.Token(call))
 	} else {
-		c.emit2(OpCall, opcodeInt(len(call.Args)), call.Token())
+		c.emit2(OpCall, opcodeInt(len(call.Args)), ast.Token(call))
 	}
 }
 
@@ -375,38 +375,38 @@ func (c *Compiler) compileFunction(f *ast.Function) {
 	compiler.compileExpr(f.Body, true)
 	function := compiler.end(f)
 	idx := c.addConstant(MakeFunction(function))
-	c.emit2(OpClosure, opcodeInt(idx), f.Token())
+	c.emit2(OpClosure, opcodeInt(idx), ast.Token(f))
 }
 
 func (c *Compiler) compileIf(i *ast.If, tailPosition bool) {
 	c.compileExpr(i.Cond, false)
-	thenJump := c.emitJump(OpJumpIfFalse, i.Token())
-	c.emit1(OpPop, i.Token())
+	thenJump := c.emitJump(OpJumpIfFalse, ast.Token(i))
+	c.emit1(OpPop, ast.Token(i))
 	c.compileExpr(i.Then, tailPosition)
-	elseJump := c.emitJump(OpJump, i.Token())
+	elseJump := c.emitJump(OpJump, ast.Token(i))
 	c.patchJump(thenJump)
-	c.emit1(OpPop, i.Token())
+	c.emit1(OpPop, ast.Token(i))
 	c.compileExpr(i.Else, tailPosition)
 	c.patchJump(elseJump)
 }
 
 func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
 	if len(cond.Clauses) == 0 {
-		c.emit1(OpNil, cond.Token())
+		c.emit1(OpNil, ast.Token(cond))
 		return
 	}
 	var endJumps []int
 	for _, clause := range cond.Clauses {
 		c.compileExpr(clause.Cond, false)
-		nextJump := c.emitJump(OpJumpIfFalse, clause.Cond.Token())
-		c.emit1(OpPop, clause.Cond.Token())
+		nextJump := c.emitJump(OpJumpIfFalse, ast.Token(clause.Cond))
+		c.emit1(OpPop, ast.Token(clause.Cond))
 		c.compileExpr(clause.Value, tailPosition)
-		endJump := c.emitJump(OpJump, clause.Value.Token())
+		endJump := c.emitJump(OpJump, ast.Token(clause.Value))
 		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
-		c.emit1(OpPop, clause.Cond.Token())
+		c.emit1(OpPop, ast.Token(clause.Cond))
 	}
-	c.emit1(OpNil, cond.Token())
+	c.emit1(OpNil, ast.Token(cond))
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -415,7 +415,7 @@ func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
 func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 	if len(and.Exprs) == 0 {
 		idx := c.addConstant(True)
-		c.emit2(OpConstant, opcodeInt(idx), and.Token())
+		c.emit2(OpConstant, opcodeInt(idx), ast.Token(and))
 		return
 	}
 	var endJumps []int
@@ -423,9 +423,9 @@ func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 		exprTailPosition := tailPosition && i == len(and.Exprs)-1
 		c.compileExpr(expr, exprTailPosition)
 		if i < len(and.Exprs)-1 {
-			endJump := c.emitJump(OpJumpIfFalse, expr.Token())
+			endJump := c.emitJump(OpJumpIfFalse, ast.Token(expr))
 			endJumps = append(endJumps, endJump)
-			c.emit1(OpPop, expr.Token())
+			c.emit1(OpPop, ast.Token(expr))
 		}
 	}
 	for _, jump := range endJumps {
@@ -435,7 +435,7 @@ func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
 
 func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 	if len(or.Exprs) == 0 {
-		c.emit1(OpNil, or.Token())
+		c.emit1(OpNil, ast.Token(or))
 		return
 	}
 	var endJumps []int
@@ -443,9 +443,9 @@ func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 		exprTailPosition := tailPosition && i == len(or.Exprs)-1
 		c.compileExpr(expr, exprTailPosition)
 		if i < len(or.Exprs)-1 {
-			endJump := c.emitJump(OpJumpIfTrue, expr.Token())
+			endJump := c.emitJump(OpJumpIfTrue, ast.Token(expr))
 			endJumps = append(endJumps, endJump)
-			c.emit1(OpPop, expr.Token())
+			c.emit1(OpPop, ast.Token(expr))
 		}
 	}
 	for _, jump := range endJumps {
@@ -456,23 +456,23 @@ func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
 func (c *Compiler) compileSet(set *ast.Set) {
 	if idx, ok := c.resolveLocal(set.Variable); ok {
 		c.compileExpr(set.Value, false)
-		c.emit2(OpSetLocal, opcodeInt(idx), set.Token())
+		c.emit2(OpSetLocal, opcodeInt(idx), ast.Token(set))
 		return
 	}
 	if idx, ok := c.resolveUpvalue(set.Variable); ok {
 		c.compileExpr(set.Value, false)
-		c.emit2(OpSetUpvalue, opcodeInt(idx), set.Token())
+		c.emit2(OpSetUpvalue, opcodeInt(idx), ast.Token(set))
 		return
 	}
 	idx := c.addConstant(MakeAtom(set.Variable))
 	c.compileExpr(set.Value, false)
-	c.emit2(OpSetGlobal, opcodeInt(idx), set.Token())
+	c.emit2(OpSetGlobal, opcodeInt(idx), ast.Token(set))
 }
 
 func (c *Compiler) compileBegin(begin *ast.Begin, tailPosition bool) {
 	for _, expr := range begin.Exprs {
 		c.compileExpr(expr, false)
-		c.emit1(OpPop, begin.Token())
+		c.emit1(OpPop, ast.Token(begin))
 	}
 	c.compileExpr(begin.Tail, tailPosition)
 }

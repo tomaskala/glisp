@@ -50,9 +50,9 @@ func transformLet(let *ast.Let) ast.Node {
 		Name:   "let",
 		Params: params,
 		Body:   let.Body,
-		Tok:    let.Token(),
+		Tok:    ast.Token(let),
 	}
-	return &ast.Call{Func: function, Args: args, Tok: let.Token()}
+	return &ast.Call{Func: function, Args: args, Tok: ast.Token(let)}
 }
 
 // The following let* expression:
@@ -69,12 +69,12 @@ func transformLetStar(let *ast.Let) ast.Node {
 			Name:   "let*",
 			Params: []string{binding.Name},
 			Body:   node,
-			Tok:    let.Token(),
+			Tok:    ast.Token(let),
 		}
 		node = &ast.Call{
 			Func: function,
 			Args: []ast.Node{binding.Value},
-			Tok:  let.Token(),
+			Tok:  ast.Token(let),
 		}
 	}
 	return node
@@ -99,23 +99,23 @@ func transformLetRec(let *ast.Let) ast.Node {
 	setExprs := make([]ast.Node, len(let.Bindings))
 	for i, binding := range let.Bindings {
 		params[i] = binding.Name
-		args[i] = &ast.Nil{Tok: binding.Value.Token()}
+		args[i] = &ast.Nil{Tok: ast.Token(binding.Value)}
 		setExprs[i] = &ast.Set{
 			Variable: binding.Name,
 			Value:    binding.Value,
-			Tok:      binding.Value.Token(),
+			Tok:      ast.Token(binding.Value),
 		}
 	}
 	begin := &ast.Begin{
 		Exprs: setExprs,
 		Tail:  let.Body,
-		Tok:   let.Token(),
+		Tok:   ast.Token(let),
 	}
 	function := &ast.Function{
 		Name:   "letrec",
 		Params: params,
 		Body:   begin,
-		Tok:    let.Token(),
+		Tok:    ast.Token(let),
 	}
-	return &ast.Call{Func: function, Args: args, Tok: let.Token()}
+	return &ast.Call{Func: function, Args: args, Tok: ast.Token(let)}
 }

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"tomaskala.com/glisp/internal/ast"
 	"tomaskala.com/glisp/internal/tokenizer"
 )
@@ -22,7 +24,11 @@ func newTestParser(name, source string) *Parser {
 }
 
 func exprsEqual(expected, actual ast.Node) bool {
-	return expected.Equal(actual)
+	skipTokens := cmp.FilterPath(func(p cmp.Path) bool {
+		sf, ok := p.Last().(cmp.StructField)
+		return ok && sf.Name() == "Tok"
+	}, cmp.Ignore())
+	return cmp.Equal(expected, actual, skipTokens)
 }
 
 func stringSlicesEqual(expected, actual []string) bool {
@@ -186,7 +192,7 @@ var callTests = map[string]parserTest{
 	"let expression call":    {source: "((let ((x 5)) (lambda (y) (+ x y))) 3)", Node: makeCall(makeLet(ast.LetPlain, []ast.Binding{{Name: "x", Value: makeNumber(5)}}, makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))), []ast.Node{makeNumber(3)})},
 	"let* expression call":   {source: "((let* ((x 5)) (lambda (y) (+ x y))) 3)", Node: makeCall(makeLet(ast.LetStar, []ast.Binding{{Name: "x", Value: makeNumber(5)}}, makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))), []ast.Node{makeNumber(3)})},
 	"letrec expression call": {source: "((letrec ((x 5)) (lambda (y) (+ x y))) 3)", Node: makeCall(makeLet(ast.LetRec, []ast.Binding{{Name: "x", Value: makeNumber(5)}}, makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))), []ast.Node{makeNumber(3)})},
-	"call with no args":      {source: "((lambda () 42))", Node: makeCall(makeFunction("", []string{}, "", makeNumber(42)), []ast.Node{})},
+	"call with no args":      {source: "((lambda () 42))", Node: makeCall(makeFunction("", nil, "", makeNumber(42)), nil)},
 	"call with many args":    {source: "((lambda (a b c d) (+ a b c d)) 1 2 3 4)", Node: makeCall(makeFunction("", []string{"a", "b", "c", "d"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("a"), makeAtom("b"), makeAtom("c"), makeAtom("d")})), []ast.Node{makeNumber(1), makeNumber(2), makeNumber(3), makeNumber(4)})},
 	"nested call":            {source: "(((lambda (x) (lambda (y) (+ x y))) 5) 3)", Node: makeCall(makeCall(makeFunction("", []string{"x"}, "", makeFunction("", []string{"y"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))), []ast.Node{makeNumber(5)}), []ast.Node{makeNumber(3)})},
 }
@@ -194,7 +200,7 @@ var callTests = map[string]parserTest{
 var namedCallTests = map[string]parserTest{
 	"simple call":     {source: "(+ 1 2)", Node: makeCall(makeAtom("+"), []ast.Node{makeNumber(1), makeNumber(2)})},
 	"nested call":     {source: "(+ (* 2 3) 4)", Node: makeCall(makeAtom("+"), []ast.Node{makeCall(makeAtom("*"), []ast.Node{makeNumber(2), makeNumber(3)}), makeNumber(4)})},
-	"no args":         {source: "(list)", Node: makeCall(makeAtom("list"), []ast.Node{})},
+	"no args":         {source: "(list)", Node: makeCall(makeAtom("list"), nil)},
 	"one arg":         {source: "(car lst)", Node: makeCall(makeAtom("car"), []ast.Node{makeAtom("lst")})},
 	"many args":       {source: "(+ 1 2 3 4 5)", Node: makeCall(makeAtom("+"), []ast.Node{makeNumber(1), makeNumber(2), makeNumber(3), makeNumber(4), makeNumber(5)})},
 	"call with quote": {source: "(cons 'a '())", Node: makeCall(makeAtom("cons"), []ast.Node{makeQuote(makeAtom("a")), makeQuote(makeNil())})},
@@ -223,10 +229,10 @@ var defineTests = map[string]parserTest{
 
 var lambdaTests = map[string]parserTest{
 	"simple lambda":     {source: "(lambda (x) x)", Node: makeFunction("", []string{"x"}, "", makeAtom("x"))},
-	"lambda no args":    {source: "(lambda () 42)", Node: makeFunction("", []string{}, "", makeNumber(42))},
+	"lambda no args":    {source: "(lambda () 42)", Node: makeFunction("", nil, "", makeNumber(42))},
 	"lambda multi args": {source: "(lambda (x y z) (+ x y z))", Node: makeFunction("", []string{"x", "y", "z"}, "", makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y"), makeAtom("z")}))},
 	"lambda rest param": {source: "(lambda (x . xs) (cons x xs))", Node: makeFunction("", []string{"x"}, "xs", makeCall(makeAtom("cons"), []ast.Node{makeAtom("x"), makeAtom("xs")}))},
-	"lambda only rest":  {source: "(lambda xs xs)", Node: makeFunction("", []string{}, "xs", makeAtom("xs"))},
+	"lambda only rest":  {source: "(lambda xs xs)", Node: makeFunction("", nil, "xs", makeAtom("xs"))},
 	// Edge cases for lambda
 	"lambda complex body":     {source: "(lambda (x) (if (> x 0) x (- x)))", Node: makeFunction("", []string{"x"}, "", makeIf(makeCall(makeAtom(">"), []ast.Node{makeAtom("x"), makeNumber(0)}), makeAtom("x"), makeCall(makeAtom("-"), []ast.Node{makeAtom("x")})))},
 	"lambda nested":           {source: "(lambda (f) (lambda (x) (f x)))", Node: makeFunction("", []string{"f"}, "", makeFunction("", []string{"x"}, "", makeCall(makeAtom("f"), []ast.Node{makeAtom("x")})))},
@@ -244,9 +250,9 @@ var letTests = map[string]parserTest{
 		Node: makeLet(ast.LetStar, []ast.Binding{{Name: "x", Value: makeNumber(1)}, {Name: "y", Value: makeNumber(2)}}, makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))},
 	"letrec multiple bindings": {source: "(letrec ((x 1) (y 2)) (+ x y))",
 		Node: makeLet(ast.LetRec, []ast.Binding{{Name: "x", Value: makeNumber(1)}, {Name: "y", Value: makeNumber(2)}}, makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")}))},
-	"let no bindings":    {source: "(let () 42)", Node: makeLet(ast.LetPlain, []ast.Binding{}, makeNumber(42))},
-	"let* no bindings":   {source: "(let* () 42)", Node: makeLet(ast.LetStar, []ast.Binding{}, makeNumber(42))},
-	"letrec no bindings": {source: "(letrec () 42)", Node: makeLet(ast.LetRec, []ast.Binding{}, makeNumber(42))},
+	"let no bindings":    {source: "(let () 42)", Node: makeLet(ast.LetPlain, nil, makeNumber(42))},
+	"let* no bindings":   {source: "(let* () 42)", Node: makeLet(ast.LetStar, nil, makeNumber(42))},
+	"letrec no bindings": {source: "(letrec () 42)", Node: makeLet(ast.LetRec, nil, makeNumber(42))},
 	"let nested": {source: "(let ((x 1)) (let ((y 2)) (+ x y)))",
 		Node: makeLet(ast.LetPlain, []ast.Binding{{Name: "x", Value: makeNumber(1)}}, makeLet(ast.LetPlain, []ast.Binding{{Name: "y", Value: makeNumber(2)}}, makeCall(makeAtom("+"), []ast.Node{makeAtom("x"), makeAtom("y")})))},
 	"let* nested": {source: "(let* ((x 1)) (let* ((y 2)) (+ x y)))",
@@ -297,7 +303,7 @@ var ifTests = map[string]parserTest{
 }
 
 var condTests = map[string]parserTest{
-	"empty cond": {source: "(cond)", Node: makeCond([]ast.CondClause{})},
+	"empty cond": {source: "(cond)", Node: makeCond(nil)},
 	"single clause": {source: "(cond (#t 42))",
 		Node: makeCond([]ast.CondClause{makeCondClause(makeAtom("#t"), makeNumber(42))})},
 	"multiple clauses": {source: "(cond ((= x 0) 'zero) ((= x 1) 'one) (#t 'other))",
@@ -325,7 +331,7 @@ var condTests = map[string]parserTest{
 }
 
 var andTests = map[string]parserTest{
-	"empty and":    {source: "(and)", Node: makeAnd([]ast.Node{})},
+	"empty and":    {source: "(and)", Node: makeAnd(nil)},
 	"single and":   {source: "(and #t)", Node: makeAnd([]ast.Node{makeAtom("#t")})},
 	"multiple and": {source: "(and a b c)", Node: makeAnd([]ast.Node{makeAtom("a"), makeAtom("b"), makeAtom("c")})},
 	"and with calls": {source: "(and (> x 0) (< x 10))",
@@ -346,7 +352,7 @@ var andTests = map[string]parserTest{
 }
 
 var orTests = map[string]parserTest{
-	"empty or":    {source: "(or)", Node: makeOr([]ast.Node{})},
+	"empty or":    {source: "(or)", Node: makeOr(nil)},
 	"single or":   {source: "(or #t)", Node: makeOr([]ast.Node{makeAtom("#t")})},
 	"multiple or": {source: "(or a b c)", Node: makeOr([]ast.Node{makeAtom("a"), makeAtom("b"), makeAtom("c")})},
 	"or with calls": {source: "(or (null? lst) (empty? lst))",
