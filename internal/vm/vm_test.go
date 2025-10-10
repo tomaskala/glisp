@@ -314,10 +314,10 @@ func TestMutatingPairErrors(t *testing.T) {
 		source      string
 		expectedErr string
 	}{
-		{"set_car_non_pair", "(set-car! 'hello 'world)", "set-car! is only defined for pairs"},
-		{"set_car_nil", "(set-car! () 'value)", "set-car! is only defined for pairs"},
-		{"set_cdr_non_pair", "(set-cdr! 42 'value)", "set-cdr! is only defined for pairs"},
-		{"set_cdr_nil", "(set-cdr! () 'value)", "set-cdr! is only defined for pairs"},
+		{"set_car_non_pair", "(set-car! 'hello 'world)", "set-car! expects a pair"},
+		{"set_car_nil", "(set-car! () 'value)", "set-car! expects a pair"},
+		{"set_cdr_non_pair", "(set-cdr! 42 'value)", "set-cdr! expects a pair"},
+		{"set_cdr_nil", "(set-cdr! () 'value)", "set-cdr! expects a pair"},
 	}
 
 	for _, tt := range tests {

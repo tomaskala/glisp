@@ -284,72 +284,16 @@ func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
 	}
 }
 
-type builtinFunc struct {
-	name  string
-	kind  runtime.Builtin
-	arity int
-}
-
-var builtins map[string]builtinFunc = map[string]builtinFunc{
-	"cons":     {"cons", runtime.BuiltinCons, 2},
-	"car":      {"car", runtime.BuiltinCar, 1},
-	"cdr":      {"cdr", runtime.BuiltinCdr, 1},
-	"+":        {"+", runtime.BuiltinAdd, -1},
-	"-":        {"-", runtime.BuiltinSub, -1},
-	"*":        {"*", runtime.BuiltinMul, -1},
-	"/":        {"/", runtime.BuiltinDiv, -1},
-	"=":        {"=", runtime.BuiltinNumEq, 2},
-	"<":        {"<", runtime.BuiltinNumLt, 2},
-	"<=":       {"<=", runtime.BuiltinNumLte, 2},
-	">":        {">", runtime.BuiltinNumGt, 2},
-	">=":       {">=", runtime.BuiltinNumGte, 2},
-	"eq?":      {"eq?", runtime.BuiltinEq, 2},
-	"atom?":    {"atom?", runtime.BuiltinIsAtom, 1},
-	"nil?":     {"nil?", runtime.BuiltinIsNil, 1},
-	"pair?":    {"pair?", runtime.BuiltinIsPair, 1},
-	"not":      {"not", runtime.BuiltinIsNil, 1},
-	"set-car!": {"set-car!", runtime.BuiltinSetCar, 2},
-	"set-cdr!": {"set-cdr!", runtime.BuiltinSetCdr, 2},
-	"display":  {"display", runtime.BuiltinDisplay, 1},
-	"newline":  {"newline", runtime.BuiltinNewline, 0},
-}
-
 func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
-	builtin, builtinFound := getBuiltin(call)
-	if builtinFound {
-		c.checkArgs(builtin.name, builtin.arity, len(call.Args))
-	} else {
-		c.compileExpr(call.Func, false)
-	}
+	c.compileExpr(call.Func, false)
 	for _, a := range call.Args {
 		c.compileExpr(a, false)
 	}
-	if builtinFound {
-		c.emit1(runtime.OpCallBuiltin, ast.Token(call))
-		c.emit2(runtime.OpCode(builtin.kind), opcodeInt(len(call.Args)), ast.Token(call))
-	} else if tailPosition {
+	if tailPosition {
 		c.emit2(runtime.OpTailCall, opcodeInt(len(call.Args)), ast.Token(call))
 	} else {
 		c.emit2(runtime.OpCall, opcodeInt(len(call.Args)), ast.Token(call))
 	}
-}
-
-func (c *Compiler) checkArgs(name string, arity, argCount int) {
-	if arity >= 0 && arity != argCount {
-		panic(c.errorf("%s expects %d arguments, got %d", name, arity, argCount))
-	}
-	if arity == -1 && argCount == 0 {
-		panic(c.errorf("%s expects at least 1 argument", name))
-	}
-}
-
-func getBuiltin(call *ast.Call) (builtinFunc, bool) {
-	atom, ok := call.Func.(*ast.Atom)
-	if !ok {
-		return builtinFunc{}, false
-	}
-	builtin, ok := builtins[atom.Name]
-	return builtin, ok
 }
 
 func (c *Compiler) compileFunction(f *ast.Function) {

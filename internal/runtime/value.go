@@ -17,7 +17,12 @@ const (
 	TypeUpvalue
 	TypeFunction
 	TypeClosure
+	TypeBuiltin
 )
+
+func IsTruthy(v Value) bool {
+	return v != Nil
+}
 
 type Program struct {
 	Function *Function
@@ -64,6 +69,10 @@ func MakeFunction(f *Function) Value {
 
 func MakeClosure(c *Closure) Value {
 	return Value{typ: TypeClosure, ptr: unsafe.Pointer(c)}
+}
+
+func MakeBuiltin(b *Builtin) Value {
+	return Value{typ: TypeBuiltin, ptr: unsafe.Pointer(b)}
 }
 
 // Type checks
@@ -117,6 +126,13 @@ func (v Value) AsClosure() (*Closure, bool) {
 	return (*Closure)(v.ptr), true
 }
 
+func (v Value) AsBuiltin() (*Builtin, bool) {
+	if v.typ != TypeBuiltin {
+		return nil, false
+	}
+	return (*Builtin)(v.ptr), true
+}
+
 var (
 	EmptyAtom = NewAtom("")
 	Nil       = MakeNil()
@@ -156,6 +172,12 @@ type Closure struct {
 	Upvalues []*Upvalue
 }
 
+type Builtin struct {
+	Name     Atom
+	Arity    int
+	Function func([]Value) (Value, error)
+}
+
 func (v Value) String() string {
 	switch v.typ {
 	case TypeNil:
@@ -172,6 +194,9 @@ func (v Value) String() string {
 			return "<lambda closure>"
 		}
 		return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
+	case TypeBuiltin:
+		b := (*Builtin)(v.ptr)
+		return fmt.Sprintf("<builtin %s>", b.Name.Value())
 	default:
 		return "<unknown>"
 	}

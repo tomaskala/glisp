@@ -41,10 +41,9 @@ type VM struct {
 }
 
 func NewVM() *VM {
-	globals := map[runtime.Atom]runtime.Value{
-		runtime.NewAtom("#t"): runtime.True,
-	}
-	return &VM{stack: make([]runtime.Value, 0, stackInit), globals: globals}
+	stack := make([]runtime.Value, 0, stackInit)
+	globals := runtime.LoadBuiltins()
+	return &VM{stack: stack, globals: globals}
 }
 
 func (vm *VM) push(v runtime.Value) {
@@ -66,11 +65,6 @@ func (vm *VM) pop() runtime.Value {
 	return vm.stack[vm.stackTop]
 }
 
-func (vm *VM) pop2() (runtime.Value, runtime.Value) {
-	vm.stackTop -= 2
-	return vm.stack[vm.stackTop+1], vm.stack[vm.stackTop]
-}
-
 func (vm *VM) pushFrame(closure *runtime.Closure, base int) error {
 	if vm.numFrames == framesMax {
 		return vm.runtimeError("stack overflow")
@@ -81,10 +75,6 @@ func (vm *VM) pushFrame(closure *runtime.Closure, base int) error {
 }
 func (vm *VM) peekFrame() *Frame { return &vm.frames[vm.numFrames-1] }
 func (vm *VM) popFrame()         { vm.numFrames-- }
-
-func isTruthy(v runtime.Value) bool {
-	return v != runtime.Nil
-}
 
 func (vm *VM) runtimeError(format string, args ...any) error {
 	var builder strings.Builder
@@ -140,6 +130,35 @@ func (vm *VM) checkArgs(closure *runtime.Closure, argCount int) error {
 	return nil
 }
 
+func (vm *VM) callValue(callee runtime.Value, argCount int) error {
+	if builtin, ok := callee.AsBuiltin(); ok {
+		return vm.callBuiltin(builtin, argCount)
+	}
+	if closure, ok := callee.AsClosure(); ok {
+		if err := vm.checkArgs(closure, argCount); err != nil {
+			return err
+		}
+		return vm.callClosure(closure, argCount)
+	}
+	return vm.runtimeError("attempting to call %v", callee)
+}
+
+func (vm *VM) callBuiltin(builtin *runtime.Builtin, argCount int) error {
+	if builtin.Arity >= 0 && builtin.Arity != argCount {
+		return vm.runtimeError("%s expects %d arguments, got %d", builtin.Name.Value(), builtin.Arity, argCount)
+	} else if builtin.Arity == -1 && argCount == 0 {
+		return vm.runtimeError("%s expects at least 1 argument", builtin.Name.Value())
+	}
+	base := vm.stackTop - argCount
+	result, err := builtin.Function(vm.stack[base : base+argCount])
+	if err != nil {
+		return vm.runtimeError("%s", err.Error())
+	}
+	vm.stackTop = base - 1
+	vm.push(result)
+	return nil
+}
+
 func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 	function := closure.Function
 	base := vm.stackTop - argCount
@@ -153,6 +172,20 @@ func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 		vm.push(restArgs)
 	}
 	return vm.pushFrame(closure, base)
+}
+
+func (vm *VM) tailCallValue(callee runtime.Value, argCount int) error {
+	if builtin, ok := callee.AsBuiltin(); ok {
+		return vm.callBuiltin(builtin, argCount)
+	}
+	if closure, ok := callee.AsClosure(); ok {
+		if err := vm.checkArgs(closure, argCount); err != nil {
+			return err
+		}
+		vm.tailCallClosure(closure, argCount)
+		return nil
+	}
+	return vm.runtimeError("attempting to call %v", callee)
 }
 
 func (vm *VM) tailCallClosure(closure *runtime.Closure, argCount int) {
@@ -218,31 +251,13 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 		case runtime.OpCall:
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
-			closure, ok := callee.AsClosure()
-			if !ok {
-				return runtime.Nil, vm.runtimeError("attempting to call %v", callee)
-			}
-			if err := vm.checkArgs(closure, argCount); err != nil {
-				return runtime.Nil, err
-			}
-			if err := vm.callClosure(closure, argCount); err != nil {
+			if err := vm.callValue(callee, argCount); err != nil {
 				return runtime.Nil, err
 			}
 		case runtime.OpTailCall:
 			argCount := int(readOpCode(frame))
 			callee := vm.peek(argCount)
-			closure, ok := callee.AsClosure()
-			if !ok {
-				return runtime.Nil, vm.runtimeError("attempting to call %v", callee)
-			}
-			if err := vm.checkArgs(closure, argCount); err != nil {
-				return runtime.Nil, err
-			}
-			vm.tailCallClosure(closure, argCount)
-		case runtime.OpCallBuiltin:
-			builtin := runtime.Builtin(readOpCode(frame))
-			argCount := int(readOpCode(frame))
-			if err := vm.callBuiltin(builtin, argCount); err != nil {
+			if err := vm.tailCallValue(callee, argCount); err != nil {
 				return runtime.Nil, err
 			}
 		case runtime.OpReturn:
@@ -316,12 +331,12 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			frame.ip += offset
 		case runtime.OpJumpIfFalse:
 			offset := int(readOpCode(frame))
-			if !isTruthy(vm.peek(0)) {
+			if !runtime.IsTruthy(vm.peek(0)) {
 				frame.ip += offset
 			}
 		case runtime.OpJumpIfTrue:
 			offset := int(readOpCode(frame))
-			if isTruthy(vm.peek(0)) {
+			if runtime.IsTruthy(vm.peek(0)) {
 				frame.ip += offset
 			}
 		default:
