@@ -31,18 +31,6 @@ func exprsEqual(expected, actual ast.Node) bool {
 	return cmp.Equal(expected, actual, skipTokens)
 }
 
-func stringSlicesEqual(expected, actual []string) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for i := range expected {
-		if expected[i] != actual[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func makeNil() *ast.Nil {
 	return &ast.Nil{Tok: tokenizer.Token{}}
 }
@@ -933,7 +921,7 @@ func TestParseStringList(t *testing.T) {
 	parser := newTestParser("test", "x y z)")
 	args, dotArg := parser.parseStringList()
 	expected := []string{"x", "y", "z"}
-	if !stringSlicesEqual(args, expected) {
+	if !cmp.Equal(args, expected) {
 		t.Errorf("expected %v, got %v", expected, args)
 	}
 	if dotArg != "" {
@@ -945,7 +933,7 @@ func TestParseStringListWithDot(t *testing.T) {
 	parser := newTestParser("test", "x y . rest)")
 	args, dotArg := parser.parseStringList()
 	expected := []string{"x", "y"}
-	if !stringSlicesEqual(args, expected) {
+	if !cmp.Equal(args, expected) {
 		t.Errorf("expected %v, got %v", expected, args)
 	}
 	if dotArg != "rest" {

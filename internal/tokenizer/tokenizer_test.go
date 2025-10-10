@@ -3,6 +3,8 @@ package tokenizer
 import (
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // Helper function to tokenize entire input and return all tokens
@@ -17,24 +19,6 @@ func tokenizeAll(source string) []Token {
 		}
 	}
 	return tokens
-}
-
-// Helper function to check if two tokens are equal
-func tokensEqual(a, b Token) bool {
-	return a.Type == b.Type && a.Val == b.Val && a.Pos.Line == b.Pos.Line && a.Pos.Column == b.Pos.Column
-}
-
-// Helper function to check if token slices are equal
-func tokenSlicesEqual(a, b []Token) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !tokensEqual(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // Basic token tests
@@ -534,7 +518,7 @@ func TestBasicTokens(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tokenizer := NewTokenizer(tc.source)
 			token := tokenizer.NextToken()
-			if !tokensEqual(token, tc.token) {
+			if !cmp.Equal(token, tc.token) {
 				t.Errorf("expected %#v, got %#v", tc.token, token)
 			}
 			// Check that next token is EOF
@@ -551,7 +535,7 @@ func TestNumberFormats(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tokenizer := NewTokenizer(tc.source)
 			token := tokenizer.NextToken()
-			if !tokensEqual(token, tc.token) {
+			if !cmp.Equal(token, tc.token) {
 				t.Errorf("expected %#v, got %#v", tc.token, token)
 			}
 		})
@@ -563,7 +547,7 @@ func TestAtomEdgeCases(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tokenizer := NewTokenizer(tc.source)
 			token := tokenizer.NextToken()
-			if !tokensEqual(token, tc.token) {
+			if !cmp.Equal(token, tc.token) {
 				t.Errorf("expected %#v, got %#v", tc.token, token)
 			}
 		})
@@ -574,12 +558,12 @@ func TestSequences(t *testing.T) {
 	for name, tc := range sequenceTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Token mismatch for %s", name)
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
 				for i := 0; i < len(tokens) && i < len(tc.tokens); i++ {
-					if !tokensEqual(tokens[i], tc.tokens[i]) {
+					if !cmp.Equal(tokens[i], tc.tokens[i]) {
 						t.Errorf("First difference at index %d: expected %#v, got %#v", i, tc.tokens[i], tokens[i])
 						break
 					}
@@ -593,7 +577,7 @@ func TestWhitespace(t *testing.T) {
 	for name, tc := range whitespaceTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Token mismatch for %s", name)
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
@@ -606,7 +590,7 @@ func TestComments(t *testing.T) {
 	for name, tc := range commentTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Token mismatch for %s", name)
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
@@ -619,7 +603,7 @@ func TestPositions(t *testing.T) {
 	for name, tc := range positionTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Token mismatch for %s", name)
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
@@ -632,7 +616,7 @@ func TestEdgeCases(t *testing.T) {
 	for name, tc := range edgeCaseTests {
 		t.Run(name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Token mismatch for %s", name)
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
@@ -725,7 +709,7 @@ func TestSignedNumbersVsAtoms(t *testing.T) {
 		t.Run(tc.source, func(t *testing.T) {
 			tokenizer := NewTokenizer(tc.source)
 			token := tokenizer.NextToken()
-			if !tokensEqual(token, tc.expected) {
+			if !cmp.Equal(token, tc.expected) {
 				t.Errorf("for source %q: expected %#v, got %#v", tc.source, tc.expected, token)
 			}
 		})
@@ -773,7 +757,7 @@ func TestCommentEdgeCases(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tokens := tokenizeAll(tc.source)
-			if !tokenSlicesEqual(tokens, tc.tokens) {
+			if !cmp.Equal(tokens, tc.tokens) {
 				t.Errorf("Expected: %#v", tc.tokens)
 				t.Errorf("Got:      %#v", tokens)
 			}
@@ -819,7 +803,7 @@ func TestUnicodeHandling(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tokenizer := NewTokenizer(tc.source)
 			token := tokenizer.NextToken()
-			if !tokensEqual(token, tc.token) {
+			if !cmp.Equal(token, tc.token) {
 				t.Errorf("expected %#v, got %#v", tc.token, token)
 			}
 		})
