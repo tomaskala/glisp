@@ -50,6 +50,7 @@ type stateFn func(*Tokenizer) stateFn
 
 type Tokenizer struct {
 	source string // Source being tokenized.
+	line   int    // Line number of the current token, 1-based.
 	start  int    // Start position of the current token.
 	pos    int    // Current position of the tokenizer.
 	atEOF  bool   // Whether we have reached the end of the file.
@@ -57,7 +58,7 @@ type Tokenizer struct {
 }
 
 func NewTokenizer(source string) *Tokenizer {
-	return &Tokenizer{source: source}
+	return &Tokenizer{source: source, line: 1}
 }
 
 func (t *Tokenizer) accept(valid string) bool {
@@ -79,8 +80,7 @@ func (t *Tokenizer) ignore() {
 }
 
 func (t *Tokenizer) createToken(typ TokenType, val string) Token {
-	line := strings.Count(t.source[:t.start], "\n") + 1
-	return Token{typ, line, val}
+	return Token{typ, t.line, val}
 }
 
 func (t *Tokenizer) emit(typ TokenType) stateFn {
@@ -90,10 +90,11 @@ func (t *Tokenizer) emit(typ TokenType) stateFn {
 }
 
 func (t *Tokenizer) errorf(format string, args ...any) stateFn {
+	t.source = t.source[:0]
+	t.line = 1
 	t.start = 0
 	t.pos = 0
 	t.atEOF = true
-	t.source = t.source[:0]
 	t.token = t.createToken(TokenErr, fmt.Sprintf(format, args...))
 	return nil
 }
@@ -105,6 +106,9 @@ func (t *Tokenizer) next() rune {
 	}
 	r, w := utf8.DecodeRuneInString(t.source[t.pos:])
 	t.pos += w
+	if r == '\n' {
+		t.line++
+	}
 	return r
 }
 
@@ -112,8 +116,11 @@ func (t *Tokenizer) backup() {
 	if t.atEOF || t.pos == 0 {
 		return
 	}
-	_, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
+	r, w := utf8.DecodeLastRuneInString(t.source[:t.pos])
 	t.pos -= w
+	if r == '\n' {
+		t.line--
+	}
 }
 
 func (t *Tokenizer) peek() rune {
