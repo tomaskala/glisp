@@ -3,81 +3,122 @@ package compiler
 import (
 	"fmt"
 	"slices"
+	"strconv"
 
-	"tomaskala.com/glisp/internal/ast"
-	"tomaskala.com/glisp/internal/expander"
 	"tomaskala.com/glisp/internal/runtime"
 	"tomaskala.com/glisp/internal/tokenizer"
 )
 
+type ParseError struct {
+	Line    int
+	Message string
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("parse error at %d: %s", e.Line, e.Message)
+}
+
+type Parser struct {
+	name       string               // Name of the source being tokenized, used for error reporting.
+	defineName string               // Stored from the latest encountered "define", spliced into lambdas.
+	previous   tokenizer.Token      // The last read token.
+	current    tokenizer.Token      // The next token.
+	tokenizer  *tokenizer.Tokenizer // The underlying tokenizer.
+}
+
+func (p *Parser) advance() {
+	p.previous = p.current
+	p.current = p.tokenizer.NextToken()
+	if p.current.Type == tokenizer.TokenErr {
+		panic(p.errorf("%s", p.current.Val))
+	}
+}
+
+func (p *Parser) errorf(format string, args ...any) error {
+	message := fmt.Sprintf(format, args...)
+	return &ParseError{p.current.Line, message}
+}
+
+func (p *Parser) match(expected tokenizer.TokenType) bool {
+	if p.current.Type != expected {
+		return false
+	}
+	p.advance()
+	return true
+}
+
+func (p *Parser) matchVal(expected string) bool {
+	if p.current.Val != expected {
+		return false
+	}
+	p.advance()
+	return true
+}
+
+func (p *Parser) consume(expected tokenizer.TokenType) {
+	if !p.match(expected) {
+		panic(p.errorf("unexpected token: expected %v, got %v", expected, p.current.Type))
+	}
+}
+
 type CompileError struct {
+	Line    int
 	Message string
 }
 
 func (e *CompileError) Error() string {
-	return e.Message
+	return fmt.Sprintf("compile error at %d: %s", e.Line, e.Message)
 }
 
 type Local string
 
 type Compiler struct {
 	parent   *Compiler         // The enclosing compiler, if any.
+	parser   *Parser           // The underlying parser.
 	function *runtime.Function // The function currently being compiled.
 	locals   []Local           // Local variables of the function.
 }
 
-func Compile(name string, program *ast.Program) (prog *runtime.Program, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(*CompileError)
-		}
-	}()
-	expandedProgram := expander.Expand(program)
-	compiler := newCompiler(nil, name, 0)
-	compiler.compileExpr(expandedProgram, false)
-	topLevel := compiler.end(program)
-	return &runtime.Program{Function: topLevel}, err
-}
-
-func newCompiler(parent *Compiler, name string, funcArity int) *Compiler {
+func newCompiler(parent *Compiler, parser *Parser, name string) *Compiler {
 	return &Compiler{
 		parent:   parent,
-		function: &runtime.Function{Name: runtime.NewAtom(name), Arity: funcArity},
+		parser:   parser,
+		function: &runtime.Function{Name: runtime.NewAtom(name)},
 	}
 }
 
-func errorf(format string, args ...any) error {
+func (c *Compiler) errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	return &CompileError{message}
+	return &CompileError{c.parser.current.Line, message}
 }
 
-func (c *Compiler) emit1(code runtime.OpCode, token tokenizer.Token) {
-	c.function.Chunk.Write(code, token.Line)
+func (c *Compiler) emit(code runtime.OpCode) {
+	c.function.Chunk.Write(code, c.parser.previous.Line)
 }
 
-func (c *Compiler) emit2(code1, code2 runtime.OpCode, token tokenizer.Token) {
-	c.emit1(code1, token)
-	c.emit1(code2, token)
+func (c *Compiler) emitArg(code runtime.OpCode, arg int) {
+	c.emit(code)
+	c.emit(c.opcodeInt(arg))
 }
 
-func (c *Compiler) emitJump(code runtime.OpCode, token tokenizer.Token) int {
-	c.emit2(code, opcodeInt(runtime.OpCodeMax), token)
+func (c *Compiler) emitJump(code runtime.OpCode) int {
+	c.emitArg(code, runtime.OpCodeMax)
 	return len(c.function.Chunk.Code) - 1
 }
 
 func (c *Compiler) patchJump(offset int) {
 	jump := len(c.function.Chunk.Code) - 1 - offset
-	c.function.Chunk.Code[offset] = opcodeInt(jump)
+	c.function.Chunk.Code[offset] = c.opcodeInt(jump)
 }
 
-func (c *Compiler) end(node ast.Node) *runtime.Function {
-	c.emit1(runtime.OpReturn, ast.Token(node))
+func (c *Compiler) end() *runtime.Function {
+	c.emit(runtime.OpReturn)
 	return c.function
 }
 
-func opcodeInt(n int) runtime.OpCode {
+func (c *Compiler) opcodeInt(n int) runtime.OpCode {
 	if n < runtime.OpCodeMin || runtime.OpCodeMax < n {
-		panic(errorf("program too large: constant/local index or a jump offset %d is out of bounds", n))
+		panic(c.errorf("program too large: constant/local index or a jump offset %d is out of bounds", n))
 	}
 	return runtime.OpCode(n)
 }
@@ -128,271 +169,456 @@ func (c *Compiler) resolveUpvalue(name string) (int, bool) {
 	return -1, false
 }
 
-func (c *Compiler) compileExpr(node ast.Node, tailPosition bool) {
-	switch n := node.(type) {
-	case *ast.Program:
-		c.compileProgram(n)
-	case *ast.Nil:
-		c.emit1(runtime.OpNil, ast.Token(n))
-	case *ast.Atom:
-		c.compileAtom(n)
-	case *ast.Number:
-		val := runtime.MakeNumber(n.Value)
+func Compile(name, source string) (prog *runtime.Program, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if parseError, ok := r.(*ParseError); ok {
+				err = parseError
+			} else if compileError, ok := r.(*CompileError); ok {
+				err = compileError
+			}
+		}
+	}()
+	tokenizer := tokenizer.NewTokenizer(source)
+	parser := &Parser{name: name, tokenizer: tokenizer}
+	parser.advance() // Initialize the first token.
+
+	compiler := newCompiler(nil, parser, name)
+	compiler.compileProgram()
+	topLevel := compiler.end()
+	return &runtime.Program{Function: topLevel}, err
+}
+
+// Program:
+//
+// expr*.
+func (c *Compiler) compileProgram() {
+	for !c.parser.match(tokenizer.TokenEOF) {
+		c.compileExpr(false)
+		c.parser.advance()
+	}
+}
+
+// Expr:
+//
+// call | quote | number | atom.
+func (c *Compiler) compileExpr(tailPosition bool) {
+	switch {
+	case c.parser.match(tokenizer.TokenAtom):
+		c.compileAtom(c.parser.previous.Val)
+	case c.parser.match(tokenizer.TokenNumber):
+		n := c.parser.parseNumber()
+		val := runtime.MakeNumber(n)
 		idx := c.addConstant(val)
-		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
-	case *ast.Quote:
-		if _, ok := n.Value.(*ast.Nil); ok {
-			c.emit1(runtime.OpNil, ast.Token(n))
-			return
+		c.emitArg(runtime.OpConstant, idx)
+	case c.parser.match(tokenizer.TokenQuote):
+		val := c.compileQuoted()
+		if val.IsNil() {
+			c.emit(runtime.OpNil)
+		} else {
+			idx := c.addConstant(val)
+			c.emitArg(runtime.OpConstant, idx)
 		}
-		val := c.compileQuoted(n.Value)
-		idx := c.addConstant(val)
-		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
-	case *ast.Call:
-		c.compileCall(n, tailPosition)
-	case *ast.Function:
-		c.compileFunction(n)
-	case *ast.Define:
-		c.compileExpr(n.Value, false)
-		idx := c.addConstant(runtime.MakeAtom(n.Name))
-		c.emit2(runtime.OpDefineGlobal, opcodeInt(idx), ast.Token(n))
-		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(n))
-	case *ast.Let:
-		panic(errorf("unexpanded let expression"))
-	case *ast.If:
-		c.compileIf(n, tailPosition)
-	case *ast.Cond:
-		c.compileCond(n, tailPosition)
-	case *ast.And:
-		c.compileAnd(n, tailPosition)
-	case *ast.Or:
-		c.compileOr(n, tailPosition)
-	case *ast.Set:
-		c.compileSet(n)
-	case *ast.Begin:
-		c.compileBegin(n, tailPosition)
+	case c.parser.match(tokenizer.TokenLeftParen):
+		c.compileList(tailPosition)
 	default:
-		panic(errorf("unrecognized expression type: %v", node))
+		panic(c.parser.errorf("unexpected token: expected expression, got %v", c.parser.previous.Type))
 	}
 }
 
-func (c *Compiler) compileProgram(program *ast.Program) {
-	for i, expr := range program.Exprs {
-		c.compileExpr(expr, false)
-		// Pop all intermediate values except for the last one - REPL friendly.
-		if i < len(program.Exprs)-1 {
-			c.emit1(runtime.OpPop, ast.Token(expr))
-		}
-	}
-	// Handle empty programs.
-	if len(program.Exprs) == 0 {
-		c.emit1(runtime.OpNil, ast.Token(program))
-	}
-}
-
-func (c *Compiler) compileAtom(atom *ast.Atom) {
-	if idx, ok := c.resolveLocal(atom.Name); ok {
-		c.emit2(runtime.OpGetLocal, opcodeInt(idx), ast.Token(atom))
-		return
-	}
-	if idx, ok := c.resolveUpvalue(atom.Name); ok {
-		c.emit2(runtime.OpGetUpvalue, opcodeInt(idx), ast.Token(atom))
-		return
-	}
-	idx := c.addConstant(runtime.MakeAtom(atom.Name))
-	c.emit2(runtime.OpGetGlobal, opcodeInt(idx), ast.Token(atom))
-}
-
-func (c *Compiler) compileQuoted(node ast.Node) runtime.Value {
-	// Quoted Nil is handled outside of this function so that we can emit runtime.OpConstant
-	// with this function's result.
-	switch n := node.(type) {
-	case *ast.Atom:
-		return runtime.MakeAtom(n.Name)
-	case *ast.Number:
-		return runtime.MakeNumber(n.Value)
-	case *ast.Quote:
-		return c.compileQuoted(n.Value)
-	case *ast.Call:
-		cons := runtime.Nil
-		for _, arg := range slices.Backward(n.Args) {
-			cons = runtime.Cons(c.compileQuoted(arg), cons)
-		}
-		return runtime.Cons(c.compileQuoted(n.Func), cons)
-	case *ast.Function:
-		params := runtime.Nil
-		if n.RestParam != "" {
-			params = runtime.MakeAtom(n.RestParam)
-		}
-		for _, param := range slices.Backward(n.Params) {
-			params = runtime.Cons(runtime.MakeAtom(param), params)
-		}
-		return runtime.Cons(runtime.MakeAtom("lambda"), runtime.Cons(params, runtime.Cons(c.compileQuoted(n.Body), runtime.Nil)))
-	case *ast.Define:
-		return runtime.Cons(runtime.MakeAtom("define"), runtime.Cons(runtime.MakeAtom(n.Name), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
-	case *ast.Let:
-		panic(errorf("unexpanded let expression"))
-	case *ast.If:
-		cond := c.compileQuoted(n.Cond)
-		thenBranch := c.compileQuoted(n.Then)
-		elseBranch := c.compileQuoted(n.Else)
-		return runtime.Cons(runtime.MakeAtom("if"), runtime.Cons(cond, runtime.Cons(thenBranch, runtime.Cons(elseBranch, runtime.Nil))))
-	case *ast.Cond:
-		clauses := runtime.Nil
-		for _, cl := range slices.Backward(n.Clauses) {
-			cond := c.compileQuoted(cl.Cond)
-			value := c.compileQuoted(cl.Value)
-			clause := runtime.Cons(cond, runtime.Cons(value, runtime.Nil))
-			clauses = runtime.Cons(clause, clauses)
-		}
-		return runtime.Cons(runtime.MakeAtom("cond"), clauses)
-	case *ast.And:
-		exprs := runtime.Nil
-		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
-		}
-		return runtime.Cons(runtime.MakeAtom("and"), exprs)
-	case *ast.Or:
-		exprs := runtime.Nil
-		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
-		}
-		return runtime.Cons(runtime.MakeAtom("or"), exprs)
-	case *ast.Set:
-		return runtime.Cons(runtime.MakeAtom("set!"), runtime.Cons(runtime.MakeAtom(n.Variable), runtime.Cons(c.compileQuoted(n.Value), runtime.Nil)))
-	case *ast.Begin:
-		exprs := runtime.Cons(c.compileQuoted(n.Tail), runtime.Nil)
-		for _, expr := range slices.Backward(n.Exprs) {
-			exprs = runtime.Cons(c.compileQuoted(expr), exprs)
-		}
-		return runtime.Cons(runtime.MakeAtom("begin"), exprs)
-	default:
-		panic(errorf("unexpected quoted expression type: %v", node))
-	}
-}
-
-func (c *Compiler) compileCall(call *ast.Call, tailPosition bool) {
-	c.compileExpr(call.Func, false)
-	for _, a := range call.Args {
-		c.compileExpr(a, false)
-	}
-	if tailPosition {
-		c.emit2(runtime.OpTailCall, opcodeInt(len(call.Args)), ast.Token(call))
+func (c *Compiler) compileAtom(name string) {
+	var idx int
+	var op runtime.OpCode
+	if i, ok := c.resolveLocal(name); ok {
+		idx = i
+		op = runtime.OpGetLocal
+	} else if i, ok := c.resolveUpvalue(name); ok {
+		idx = i
+		op = runtime.OpGetUpvalue
 	} else {
-		c.emit2(runtime.OpCall, opcodeInt(len(call.Args)), ast.Token(call))
+		idx = c.addConstant(runtime.MakeAtom(name))
+		op = runtime.OpGetGlobal
+	}
+
+	c.emitArg(op, idx)
+}
+
+// Call:
+//
+// "(" ")" | "(" special-form ")" | "(" expr list ")"
+//
+// "(" is past
+//
+// Special forms are built in to the language and their parameters differ.
+func (c *Compiler) compileList(tailPosition bool) {
+	switch {
+	case c.parser.matchVal(")"):
+		c.emit(runtime.OpNil)
+	case c.parser.matchVal("quote"):
+		c.compileLongQuote()
+	case c.parser.matchVal("define"):
+		c.compileDefine()
+	case c.parser.matchVal("let"):
+		c.compileLet()
+	case c.parser.matchVal("let*"):
+		c.compileLet()
+	case c.parser.matchVal("letrec"):
+		c.compileLet()
+	case c.parser.matchVal("lambda"):
+		c.compileLambda()
+	case c.parser.matchVal("if"):
+		c.compileIf(tailPosition)
+	case c.parser.matchVal("cond"):
+		c.compileCond(tailPosition)
+	case c.parser.matchVal("and"):
+		c.compileAnd()
+	case c.parser.matchVal("or"):
+		c.compileOr()
+	case c.parser.matchVal("set!"):
+		c.compileSet()
+	case c.parser.matchVal("begin"):
+		c.compileBegin(tailPosition)
+	default:
+		c.compileExpr(false) // Callee
+		argCount := 0
+		for !c.parser.match(tokenizer.TokenRightParen) {
+			c.compileExpr(false) // Argument
+			argCount++
+		}
+
+		if tailPosition {
+			c.emitArg(runtime.OpTailCall, argCount)
+		} else {
+			c.emitArg(runtime.OpCall, argCount)
+		}
 	}
 }
 
-func (c *Compiler) compileFunction(f *ast.Function) {
-	compiler := newCompiler(c, f.Name, len(f.Params))
-	for _, param := range f.Params {
-		compiler.addLocal(param)
+// Quote:
+//
+// "(" "quote" expr ")"
+//
+// "(" is past
+// "quote" is past
+//
+// Compiles the long form (quote expr), as opposed to the shorthand 'expr.
+func (c *Compiler) compileLongQuote() {
+	val := c.compileQuoted()
+	if val.IsNil() {
+		c.emit(runtime.OpNil)
+	} else {
+		idx := c.addConstant(val)
+		c.emitArg(runtime.OpConstant, idx)
 	}
-	if f.RestParam != "" {
-		compiler.addLocal(f.RestParam)
+	c.parser.consume(tokenizer.TokenRightParen)
+}
+
+func (c *Compiler) compileQuoted() runtime.Value {
+	switch {
+	case c.parser.match(tokenizer.TokenAtom):
+		return runtime.MakeAtom(c.parser.previous.Val)
+	case c.parser.match(tokenizer.TokenNumber):
+		n := c.parser.parseNumber()
+		return runtime.MakeNumber(n)
+	case c.parser.match(tokenizer.TokenQuote):
+		c.parser.advance()
+		return c.compileQuoted()
+	case c.parser.match(tokenizer.TokenLeftParen):
+		if c.parser.match(tokenizer.TokenRightParen) {
+			return runtime.MakeNil()
+		}
+
+		list := runtime.MakePair(&runtime.Pair{})
+		var curr *runtime.Value = &list
+		for !c.parser.match(tokenizer.TokenRightParen) {
+			if c.parser.match(tokenizer.TokenDot) {
+				elem := c.compileQuoted()
+				*curr = elem
+				c.parser.consume(tokenizer.TokenRightParen)
+				break
+			}
+
+			elem := c.compileQuoted()
+			next := &runtime.Pair{Car: elem, Cdr: runtime.Nil}
+			*curr = runtime.MakePair(next)
+			curr = &next.Cdr
+		}
+		return list
+	default:
+		panic(c.parser.errorf("unexpected token: expected expression got: %v", c.parser.previous.Type))
+	}
+}
+
+// Define:
+//
+// "(" "define" atom expr ")"
+//
+// "(" is past
+// "define" is past.
+func (c *Compiler) compileDefine() {
+	c.parser.consume(tokenizer.TokenAtom)
+	name := c.parser.previous.Val
+
+	c.compileExpr(false) // Value
+	c.parser.consume(tokenizer.TokenRightParen)
+
+	idx := c.addConstant(runtime.MakeAtom(name))
+	c.emitArg(runtime.OpDefineGlobal, idx)
+	c.emitArg(runtime.OpConstant, idx)
+}
+
+// Let:
+//
+// "(" "let" "(" ("(" atom expr ")")* ")" expr ")"
+// "(" "let*" "(" ("(" atom expr ")")* ")" expr ")"
+// "(" "letrec" "(" ("(" atom expr ")")* ")" expr ")"
+//
+// "(" is past
+// "let"/"let*"/"letrec" is past.
+func (c *Compiler) compileLet() {
+	panic(c.errorf("let expressions are not yet implemented"))
+	/*
+		var bindings []ast.Binding
+		c.parser.consume(tokenizer.TokenLeftParen)
+		for !c.parser.match(tokenizer.TokenRightParen) {
+			c.parser.consume(tokenizer.TokenLeftParen)
+			c.parser.consume(tokenizer.TokenAtom)
+			name := c.parser.previous.Val
+			c.parser.next()
+			value := c.compileExpr()
+			c.parser.consume(tokenizer.TokenRightParen)
+			c.parser.next()
+			bindings = append(bindings, ast.Binding{Name: name, Value: value})
+		}
+		c.parser.next()
+		body := c.compileExpr()
+		c.parser.consume(tokenizer.TokenRightParen)
+		return &ast.Let{Kind: kind, Bindings: bindings, Body: body}
+	*/
+}
+
+// Lambda:
+//
+// "(" "lambda" (atom | "(" expr* ("." expr)? ")") expr ")"
+//
+// "(" is past
+// "lambda" is past.
+func (c *Compiler) compileLambda() {
+	compiler := newCompiler(c, c.parser, c.parser.defineName)
+	switch {
+	case c.parser.match(tokenizer.TokenLeftParen):
+		compiler.compileStringList()
+	case c.parser.match(tokenizer.TokenAtom):
+		compiler.addLocal(compiler.parser.previous.Val)
 		compiler.function.HasRestParam = true
+	default:
+		panic(compiler.parser.errorf("unexpected lambda parameter: %v", compiler.parser.previous.Type))
 	}
-	compiler.compileExpr(f.Body, true)
-	function := compiler.end(f)
+
+	compiler.compileExpr(true) // Body
+	compiler.parser.consume(tokenizer.TokenRightParen)
+	function := compiler.end()
 	idx := c.addConstant(runtime.MakeFunction(function))
-	c.emit2(runtime.OpClosure, opcodeInt(idx), ast.Token(f))
+	c.emitArg(runtime.OpClosure, idx)
 }
 
-func (c *Compiler) compileIf(i *ast.If, tailPosition bool) {
-	c.compileExpr(i.Cond, false)
-	thenJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(i))
-	c.emit1(runtime.OpPop, ast.Token(i))
-	c.compileExpr(i.Then, tailPosition)
-	elseJump := c.emitJump(runtime.OpJump, ast.Token(i))
+// If:
+//
+// "(" "if" expr expr expr ")"
+//
+// "(" is past
+// "if" is past.
+func (c *Compiler) compileIf(tailPosition bool) {
+	c.compileExpr(false) // Condition
+	thenJump := c.emitJump(runtime.OpJumpIfFalse)
+	c.emit(runtime.OpPop)
+
+	c.compileExpr(tailPosition) // Then branch
+	elseJump := c.emitJump(runtime.OpJump)
 	c.patchJump(thenJump)
-	c.emit1(runtime.OpPop, ast.Token(i))
-	c.compileExpr(i.Else, tailPosition)
+	c.emit(runtime.OpPop)
+
+	c.compileExpr(tailPosition) // Else branch
+	c.parser.consume(tokenizer.TokenRightParen)
 	c.patchJump(elseJump)
 }
 
-func (c *Compiler) compileCond(cond *ast.Cond, tailPosition bool) {
-	if len(cond.Clauses) == 0 {
-		c.emit1(runtime.OpNil, ast.Token(cond))
+// Cond:
+//
+// "(" "cond" ( "(" expr expr ")" )* ")"
+//
+// "(" is past
+// "cond" is past.
+func (c *Compiler) compileCond(tailPosition bool) {
+	if c.parser.match(tokenizer.TokenRightParen) {
+		c.emit(runtime.OpNil)
 		return
 	}
-	endJumps := make([]int, len(cond.Clauses))
-	for i, clause := range cond.Clauses {
-		c.compileExpr(clause.Cond, false)
-		nextJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(clause.Cond))
-		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
-		c.compileExpr(clause.Value, tailPosition)
-		endJump := c.emitJump(runtime.OpJump, ast.Token(clause.Value))
-		endJumps[i] = endJump
+
+	var endJumps []int
+	for !c.parser.match(tokenizer.TokenRightParen) {
+		c.parser.consume(tokenizer.TokenLeftParen)
+		c.compileExpr(false) // Condition
+		nextJump := c.emitJump(runtime.OpJumpIfFalse)
+		c.emit(runtime.OpPop)
+
+		c.compileExpr(tailPosition) // Value
+		c.parser.consume(tokenizer.TokenRightParen)
+		endJump := c.emitJump(runtime.OpJump)
+		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
-		c.emit1(runtime.OpPop, ast.Token(clause.Cond))
+		c.emit(runtime.OpPop)
 	}
-	c.emit1(runtime.OpNil, ast.Token(cond))
+
+	c.emit(runtime.OpNil)
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
 }
 
-func (c *Compiler) compileAnd(and *ast.And, tailPosition bool) {
-	if len(and.Exprs) == 0 {
+// And:
+//
+// "(" "and" expr* ")"
+//
+// "(" is past
+// "and" is past.
+func (c *Compiler) compileAnd() {
+	if c.parser.match(tokenizer.TokenRightParen) {
 		idx := c.addConstant(runtime.True)
-		c.emit2(runtime.OpConstant, opcodeInt(idx), ast.Token(and))
+		c.emitArg(runtime.OpConstant, idx)
 		return
 	}
+
 	var endJumps []int
-	for i, expr := range and.Exprs {
-		exprTailPosition := tailPosition && i == len(and.Exprs)-1
-		c.compileExpr(expr, exprTailPosition)
-		if i < len(and.Exprs)-1 {
-			endJump := c.emitJump(runtime.OpJumpIfFalse, ast.Token(expr))
-			endJumps = append(endJumps, endJump)
-			c.emit1(runtime.OpPop, ast.Token(expr))
+	for {
+		c.compileExpr(false)
+		if c.parser.match(tokenizer.TokenRightParen) {
+			break
 		}
+		endJump := c.emitJump(runtime.OpJumpIfFalse)
+		endJumps = append(endJumps, endJump)
+		c.emit(runtime.OpPop)
 	}
+
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
 }
 
-func (c *Compiler) compileOr(or *ast.Or, tailPosition bool) {
-	if len(or.Exprs) == 0 {
-		c.emit1(runtime.OpNil, ast.Token(or))
+// Or:
+//
+// "(" "or" expr* ")"
+//
+// "(" is past
+// "or" is past.
+func (c *Compiler) compileOr() {
+	if c.parser.match(tokenizer.TokenRightParen) {
+		c.emit(runtime.OpNil)
 		return
 	}
+
 	var endJumps []int
-	for i, expr := range or.Exprs {
-		exprTailPosition := tailPosition && i == len(or.Exprs)-1
-		c.compileExpr(expr, exprTailPosition)
-		if i < len(or.Exprs)-1 {
-			endJump := c.emitJump(runtime.OpJumpIfTrue, ast.Token(expr))
-			endJumps = append(endJumps, endJump)
-			c.emit1(runtime.OpPop, ast.Token(expr))
+	for {
+		c.compileExpr(false)
+		if c.parser.match(tokenizer.TokenRightParen) {
+			break
 		}
+		endJump := c.emitJump(runtime.OpJumpIfTrue)
+		endJumps = append(endJumps, endJump)
+		c.emit(runtime.OpPop)
 	}
+
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
 }
 
-func (c *Compiler) compileSet(set *ast.Set) {
-	if idx, ok := c.resolveLocal(set.Variable); ok {
-		c.compileExpr(set.Value, false)
-		c.emit2(runtime.OpSetLocal, opcodeInt(idx), ast.Token(set))
-		return
+// Set:
+//
+// "(" "set!" atom expr ")"
+//
+// "(" is past
+// "set!" is past.
+func (c *Compiler) compileSet() {
+	c.parser.consume(tokenizer.TokenAtom)
+	id := c.parser.previous.Val
+
+	var idx int
+	var op runtime.OpCode
+	if i, ok := c.resolveLocal(id); ok {
+		idx = i
+		op = runtime.OpSetLocal
+	} else if i, ok := c.resolveUpvalue(id); ok {
+		idx = i
+		op = runtime.OpSetUpvalue
+	} else {
+		idx = c.addConstant(runtime.MakeAtom(id))
+		op = runtime.OpSetGlobal
 	}
-	if idx, ok := c.resolveUpvalue(set.Variable); ok {
-		c.compileExpr(set.Value, false)
-		c.emit2(runtime.OpSetUpvalue, opcodeInt(idx), ast.Token(set))
-		return
-	}
-	idx := c.addConstant(runtime.MakeAtom(set.Variable))
-	c.compileExpr(set.Value, false)
-	c.emit2(runtime.OpSetGlobal, opcodeInt(idx), ast.Token(set))
+
+	c.compileExpr(false)
+	c.parser.consume(tokenizer.TokenRightParen)
+	c.emitArg(op, idx)
 }
 
-func (c *Compiler) compileBegin(begin *ast.Begin, tailPosition bool) {
-	for _, expr := range begin.Exprs {
-		c.compileExpr(expr, false)
-		c.emit1(runtime.OpPop, ast.Token(begin))
+// Begin:
+//
+// "(" "begin" expr* expr ")"
+//
+// "(" is past
+// "begin" is past.
+func (c *Compiler) compileBegin(tailPosition bool) {
+	if c.parser.match(tokenizer.TokenRightParen) {
+		c.emit(runtime.OpNil)
+		return
 	}
-	c.compileExpr(begin.Tail, tailPosition)
+
+	for !c.parser.match(tokenizer.TokenRightParen) {
+		// TODO: Fix the tail position calculation - we need to run
+		// c.compileExpr(tailPosition && next is TokenRightParen), but
+		// at this point, next is ALWAYS the last expression to be compiled
+		// c.compileExpr advances so that when it ends the compilation of the
+		// last expression, c.parser.current is TokenRightParen, the for loop
+		// check succeeds and the loop terminates.
+		c.compileExpr(tailPosition)
+	}
+}
+
+// String list:
+//
+// "(" atom* ("." atom)? ")"
+//
+// "(" is past
+//
+// This is not a part of the Lisp grammar, but the function is used
+// as a utility to parse a lambda function parameters.
+func (c *Compiler) compileStringList() {
+	for !c.parser.match(tokenizer.TokenRightParen) {
+		if c.parser.match(tokenizer.TokenDot) {
+			c.parser.consume(tokenizer.TokenAtom)
+			c.addLocal(c.parser.previous.Val)
+			c.function.HasRestParam = true
+			c.parser.consume(tokenizer.TokenRightParen)
+			break
+		}
+
+		c.parser.consume(tokenizer.TokenAtom)
+		c.addLocal(c.parser.previous.Val)
+		c.function.Arity++
+	}
+}
+
+// Number:
+//
+// number literal.
+func (p *Parser) parseNumber() float64 {
+	if num, err := strconv.ParseInt(p.previous.Val, 0, 0); err == nil {
+		return float64(num)
+	}
+
+	if num, err := strconv.ParseFloat(p.previous.Val, 64); err == nil {
+		return num
+	}
+
+	panic(p.errorf("illegal number syntax"))
 }

@@ -13,16 +13,14 @@ import (
 
 	"github.com/chzyer/readline"
 	"tomaskala.com/glisp/internal/compiler"
-	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/vm"
 )
 
 const (
 	exitSuccess      = 0
 	exitIoError      = 1
-	exitParseError   = 2
-	exitCompileError = 3
-	exitRuntimeError = 4
+	exitCompileError = 2
+	exitRuntimeError = 3
 
 	prompt = "λ "
 )
@@ -97,14 +95,8 @@ func runRepl() int {
 			continue
 		}
 
-		program, err := parser.Parse("REPL", strings.Join(lines, " "))
+		compiledProgram, err := compiler.Compile("REPL", strings.Join(lines, " "))
 		reset()
-		if err != nil {
-			fmt.Fprintf(rl.Stderr(), "Parse error: %v\n", err)
-			continue
-		}
-
-		compiledProgram, err := compiler.Compile("REPL", program)
 		if err != nil {
 			fmt.Fprintf(rl.Stderr(), "Compile error: %v\n", err)
 			continue
@@ -132,13 +124,7 @@ func runScript(path string) int {
 		return exitIoError
 	}
 
-	program, err := parser.Parse(path, string(source))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return exitParseError
-	}
-
-	compiledProgram, err := compiler.Compile(path, program)
+	compiledProgram, err := compiler.Compile(path, string(source))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return exitCompileError
