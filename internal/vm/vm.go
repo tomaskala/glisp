@@ -136,10 +136,11 @@ func (vm *VM) checkArgs(closure *runtime.Closure, argCount int) error {
 }
 
 func (vm *VM) callValue(callee runtime.Value, argCount int) error {
-	if builtin, ok := callee.AsBuiltin(); ok {
-		return vm.callBuiltin(builtin, argCount)
+	if callee.IsBuiltin() {
+		return vm.callBuiltin(callee.AsBuiltin(), argCount)
 	}
-	if closure, ok := callee.AsClosure(); ok {
+	if callee.IsClosure() {
+		closure := callee.AsClosure()
 		if err := vm.checkArgs(closure, argCount); err != nil {
 			return err
 		}
@@ -180,10 +181,11 @@ func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 }
 
 func (vm *VM) tailCallValue(callee runtime.Value, argCount int) error {
-	if builtin, ok := callee.AsBuiltin(); ok {
-		return vm.callBuiltin(builtin, argCount)
+	if callee.IsBuiltin() {
+		return vm.callBuiltin(callee.AsBuiltin(), argCount)
 	}
-	if closure, ok := callee.AsClosure(); ok {
+	if callee.IsClosure() {
+		closure := callee.AsClosure()
 		if err := vm.checkArgs(closure, argCount); err != nil {
 			return err
 		}
@@ -232,13 +234,11 @@ func readConstant(frame *Frame) runtime.Value {
 }
 
 func readAtom(frame *Frame) runtime.Atom {
-	atom, _ := readConstant(frame).AsAtom()
-	return atom
+	return readConstant(frame).AsAtom()
 }
 
 func readFunction(frame *Frame) *runtime.Function {
-	f, _ := readConstant(frame).AsFunction()
-	return f
+	return readConstant(frame).AsFunction()
 }
 
 func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {

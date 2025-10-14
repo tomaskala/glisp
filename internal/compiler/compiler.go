@@ -3,63 +3,10 @@ package compiler
 import (
 	"fmt"
 	"slices"
-	"strconv"
 
 	"tomaskala.com/glisp/internal/runtime"
 	"tomaskala.com/glisp/internal/tokenizer"
 )
-
-type ParseError struct {
-	Line    int
-	Message string
-}
-
-func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse error at %d: %s", e.Line, e.Message)
-}
-
-type Parser struct {
-	name       string               // Name of the source being tokenized, used for error reporting.
-	defineName string               // Stored from the latest encountered "define", spliced into lambdas.
-	previous   tokenizer.Token      // The last read token.
-	current    tokenizer.Token      // The next token.
-	tokenizer  *tokenizer.Tokenizer // The underlying tokenizer.
-}
-
-func (p *Parser) advance() {
-	p.previous = p.current
-	p.current = p.tokenizer.NextToken()
-	if p.current.Type == tokenizer.TokenErr {
-		panic(p.errorf("%s", p.current.Val))
-	}
-}
-
-func (p *Parser) errorf(format string, args ...any) error {
-	message := fmt.Sprintf(format, args...)
-	return &ParseError{p.current.Line, message}
-}
-
-func (p *Parser) match(expected tokenizer.TokenType) bool {
-	if p.current.Type != expected {
-		return false
-	}
-	p.advance()
-	return true
-}
-
-func (p *Parser) matchVal(expected string) bool {
-	if p.current.Val != expected {
-		return false
-	}
-	p.advance()
-	return true
-}
-
-func (p *Parser) consume(expected tokenizer.TokenType) {
-	if !p.match(expected) {
-		panic(p.errorf("unexpected token: expected %v, got %v", expected, p.current.Type))
-	}
-}
 
 type CompileError struct {
 	Line    int
@@ -70,30 +17,31 @@ func (e *CompileError) Error() string {
 	return fmt.Sprintf("compile error at %d: %s", e.Line, e.Message)
 }
 
-type Local string
-
 type Compiler struct {
-	parent   *Compiler         // The enclosing compiler, if any.
-	parser   *Parser           // The underlying parser.
-	function *runtime.Function // The function currently being compiled.
-	locals   []Local           // Local variables of the function.
+	parent     *Compiler         // The enclosing compiler, if any.
+	defineName runtime.Atom      // Stored from the latest encountered "define", spliced into lambdas.
+	function   *runtime.Function // The function currently being compiled.
+	locals     []runtime.Atom    // Local variables of the function.
 }
 
-func newCompiler(parent *Compiler, parser *Parser, name string) *Compiler {
+func newCompiler(parent *Compiler, name runtime.Atom) *Compiler {
 	return &Compiler{
 		parent:   parent,
-		parser:   parser,
-		function: &runtime.Function{Name: runtime.NewAtom(name)},
+		function: &runtime.Function{Name: name},
 	}
 }
 
 func (c *Compiler) errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	return &CompileError{c.parser.current.Line, message}
+	// TODO: Emit the current line
+	//return &CompileError{c.parser.current.Line, message}
+	return &CompileError{1, message}
 }
 
 func (c *Compiler) emit(code runtime.OpCode) {
-	c.function.Chunk.Write(code, c.parser.previous.Line)
+	// TODO: Write the current line
+	//c.function.Chunk.Write(code, c.parser.previous.Line)
+	c.function.Chunk.Write(code, 1)
 }
 
 func (c *Compiler) emitArg(code runtime.OpCode, arg int) {
@@ -133,8 +81,8 @@ func (c *Compiler) addConstant(constant runtime.Value) int {
 	return c.function.Chunk.AddConstant(constant)
 }
 
-func (c *Compiler) addLocal(name string) {
-	c.locals = append(c.locals, Local(name))
+func (c *Compiler) addLocal(name runtime.Atom) {
+	c.locals = append(c.locals, name)
 }
 
 func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
@@ -147,16 +95,16 @@ func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
 	return len(c.function.Upvalues) - 1
 }
 
-func (c *Compiler) resolveLocal(name string) (int, bool) {
+func (c *Compiler) resolveLocal(name runtime.Atom) (int, bool) {
 	for i, local := range slices.Backward(c.locals) {
-		if string(local) == name {
+		if local == name {
 			return i, true
 		}
 	}
 	return -1, false
 }
 
-func (c *Compiler) resolveUpvalue(name string) (int, bool) {
+func (c *Compiler) resolveUpvalue(name runtime.Atom) (int, bool) {
 	if c.parent == nil {
 		return -1, false
 	}
@@ -169,6 +117,70 @@ func (c *Compiler) resolveUpvalue(name string) (int, bool) {
 	return -1, false
 }
 
+// extract1 requires expr to be a pair (val1 . Nil).
+func (c *Compiler) extract1(expr runtime.Value, name string) runtime.Value {
+	if !expr.IsPair() {
+		panic(c.errorf("%s expects 1 argument, got 0", name))
+	}
+	pair1 := expr.AsPair()
+	val1 := pair1.Car
+
+	if !pair1.Cdr.IsNil() {
+		panic(c.errorf("%s expects 1 argument, got more", name))
+	}
+
+	return val1
+}
+
+// extract2 requires expr to be a pair (val1 . (val2 . Nil)).
+func (c *Compiler) extract2(expr runtime.Value, name string) (runtime.Value, runtime.Value) {
+	if !expr.IsPair() {
+		panic(c.errorf("%s expects 2 arguments, got 0", name))
+	}
+	pair1 := expr.AsPair()
+	val1 := pair1.Car
+
+	if !pair1.Cdr.IsPair() {
+		panic(c.errorf("%s expects 2 arguments, got 1", name))
+	}
+	pair2 := pair1.Cdr.AsPair()
+	val2 := pair2.Car
+
+	if !pair2.Cdr.IsNil() {
+		panic(c.errorf("%s expects 2 arguments, got more", name))
+	}
+
+	return val1, val2
+}
+
+// extract3 requires expr to be a pair (val1 . (val2 . (val3 . Nil))).
+func (c *Compiler) extract3(expr runtime.Value, name string) (runtime.Value, runtime.Value, runtime.Value) {
+	if !expr.IsPair() {
+		panic(c.errorf("%s expects 3 arguments, got 0", name))
+	}
+	pair1 := expr.AsPair()
+	val1 := pair1.Car
+
+	if !pair1.Cdr.IsPair() {
+		panic(c.errorf("%s expects 3 arguments, got 1", name))
+	}
+	pair2 := pair1.Cdr.AsPair()
+	val2 := pair2.Car
+
+	if !pair2.Cdr.IsPair() {
+		panic(c.errorf("%s expects 3 arguments, got 2", name))
+	}
+	pair3 := pair2.Cdr.AsPair()
+	val3 := pair3.Car
+
+	if !pair3.Cdr.IsNil() {
+		panic(c.errorf("%s expects 3 arguments, got more", name))
+	}
+
+	return val1, val2, val3
+}
+
+// TODO: (+) should return 0 and (*) should return 1 (no change for (-) and (/))
 func Compile(name, source string) (prog *runtime.Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -179,110 +191,101 @@ func Compile(name, source string) (prog *runtime.Program, err error) {
 			}
 		}
 	}()
-	tokenizer := tokenizer.NewTokenizer(source)
-	parser := &Parser{name: name, tokenizer: tokenizer}
-	parser.advance() // Initialize the first token.
-
-	compiler := newCompiler(nil, parser, name)
-	compiler.compileProgram()
+	compiler := newCompiler(nil, runtime.NewAtom(name))
+	compiler.compileProgram(name, source)
 	topLevel := compiler.end()
 	return &runtime.Program{Function: topLevel}, err
 }
 
 // Program:
 //
-// expr*.
-func (c *Compiler) compileProgram() {
-	for !c.parser.match(tokenizer.TokenEOF) {
-		c.compileExpr(false)
-		c.parser.advance()
+// expr*
+func (c *Compiler) compileProgram(name, source string) {
+	tokenizer := tokenizer.NewTokenizer(source)
+	parser := &Parser{name: name, tokenizer: tokenizer}
+	parser.advance() // Initialize the first token.
+
+	for !parser.atEOF() {
+		expr := parser.expression()
+		c.compileExpr(expr, false)
+		parser.advance()
 	}
 }
 
 // Expr:
 //
-// call | quote | number | atom.
-func (c *Compiler) compileExpr(tailPosition bool) {
+// nil | atom | number | pair
+func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
 	switch {
-	case c.parser.match(tokenizer.TokenAtom):
-		c.compileAtom(c.parser.previous.Val)
-	case c.parser.match(tokenizer.TokenNumber):
-		n := c.parser.parseNumber()
-		val := runtime.MakeNumber(n)
-		idx := c.addConstant(val)
-		c.emitArg(runtime.OpConstant, idx)
-	case c.parser.match(tokenizer.TokenQuote):
-		val := c.compileQuoted()
-		if val.IsNil() {
-			c.emit(runtime.OpNil)
-		} else {
-			idx := c.addConstant(val)
-			c.emitArg(runtime.OpConstant, idx)
-		}
-	case c.parser.match(tokenizer.TokenLeftParen):
-		c.compileList(tailPosition)
-	default:
-		panic(c.parser.errorf("unexpected token: expected expression, got %v", c.parser.previous.Type))
-	}
-}
-
-func (c *Compiler) compileAtom(name string) {
-	var idx int
-	var op runtime.OpCode
-	if i, ok := c.resolveLocal(name); ok {
-		idx = i
-		op = runtime.OpGetLocal
-	} else if i, ok := c.resolveUpvalue(name); ok {
-		idx = i
-		op = runtime.OpGetUpvalue
-	} else {
-		idx = c.addConstant(runtime.MakeAtom(name))
-		op = runtime.OpGetGlobal
-	}
-
-	c.emitArg(op, idx)
-}
-
-// Call:
-//
-// "(" ")" | "(" special-form ")" | "(" expr list ")"
-//
-// "(" is past
-//
-// Special forms are built in to the language and their parameters differ.
-func (c *Compiler) compileList(tailPosition bool) {
-	switch {
-	case c.parser.matchVal(")"):
+	case expr.IsNil():
 		c.emit(runtime.OpNil)
-	case c.parser.matchVal("quote"):
-		c.compileLongQuote()
-	case c.parser.matchVal("define"):
-		c.compileDefine()
-	case c.parser.matchVal("let"):
-		c.compileLet()
-	case c.parser.matchVal("let*"):
-		c.compileLet()
-	case c.parser.matchVal("letrec"):
-		c.compileLet()
-	case c.parser.matchVal("lambda"):
-		c.compileLambda()
-	case c.parser.matchVal("if"):
-		c.compileIf(tailPosition)
-	case c.parser.matchVal("cond"):
-		c.compileCond(tailPosition)
-	case c.parser.matchVal("and"):
-		c.compileAnd()
-	case c.parser.matchVal("or"):
-		c.compileOr()
-	case c.parser.matchVal("set!"):
-		c.compileSet()
-	case c.parser.matchVal("begin"):
-		c.compileBegin(tailPosition)
+	case expr.IsAtom():
+		atom := expr.AsAtom()
+
+		var idx int
+		var op runtime.OpCode
+		if i, ok := c.resolveLocal(atom); ok {
+			idx = i
+			op = runtime.OpGetLocal
+		} else if i, ok := c.resolveUpvalue(atom); ok {
+			idx = i
+			op = runtime.OpGetUpvalue
+		} else {
+			idx = c.addConstant(expr)
+			op = runtime.OpGetGlobal
+		}
+
+		c.emitArg(op, idx)
+	case expr.IsNumber():
+		idx := c.addConstant(expr)
+		c.emitArg(runtime.OpConstant, idx)
+	case expr.IsPair():
+		c.compilePair(expr.AsPair(), tailPosition)
 	default:
-		c.compileExpr(false) // Callee
+		panic(c.errorf("unexpected expression: %v", expr))
+	}
+}
+
+// Pair:
+//
+// "(" expr expr ")"
+func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
+	switch pair.Car {
+	case runtime.MakeAtom("quote"):
+		c.compileQuote(pair.Cdr)
+	case runtime.MakeAtom("define"):
+		c.compileDefine(pair.Cdr)
+	case runtime.MakeAtom("let"):
+		c.compileLet(pair.Cdr)
+	case runtime.MakeAtom("let*"):
+		c.compileLet(pair.Cdr)
+	case runtime.MakeAtom("letrec"):
+		c.compileLet(pair.Cdr)
+	case runtime.MakeAtom("lambda"):
+		c.compileLambda(pair.Cdr)
+	case runtime.MakeAtom("if"):
+		c.compileIf(pair.Cdr, tailPosition)
+	case runtime.MakeAtom("cond"):
+		c.compileCond(pair.Cdr, tailPosition)
+	case runtime.MakeAtom("and"):
+		c.compileAnd(pair.Cdr, tailPosition)
+	case runtime.MakeAtom("or"):
+		c.compileOr(pair.Cdr, tailPosition)
+	case runtime.MakeAtom("set!"):
+		c.compileSet(pair.Cdr)
+	case runtime.MakeAtom("begin"):
+		c.compileBegin(pair.Cdr, tailPosition)
+	default:
+		c.compileExpr(pair.Car, false) // Callee
+		args := pair.Cdr
 		argCount := 0
-		for !c.parser.match(tokenizer.TokenRightParen) {
-			c.compileExpr(false) // Argument
+		for !args.IsNil() {
+			if !args.IsPair() {
+				panic(c.errorf("function call expects a proper list"))
+			}
+			pair := args.AsPair()
+			c.compileExpr(pair.Car, false) // Argument
+			args = pair.Cdr
 			argCount++
 		}
 
@@ -297,72 +300,29 @@ func (c *Compiler) compileList(tailPosition bool) {
 // Quote:
 //
 // "(" "quote" expr ")"
-//
-// "(" is past
-// "quote" is past
-//
-// Compiles the long form (quote expr), as opposed to the shorthand 'expr.
-func (c *Compiler) compileLongQuote() {
-	val := c.compileQuoted()
-	if val.IsNil() {
+func (c *Compiler) compileQuote(expr runtime.Value) {
+	quoted := c.extract1(expr, "quote")
+	if quoted.IsNil() {
 		c.emit(runtime.OpNil)
 	} else {
-		idx := c.addConstant(val)
+		idx := c.addConstant(quoted)
 		c.emitArg(runtime.OpConstant, idx)
-	}
-	c.parser.consume(tokenizer.TokenRightParen)
-}
-
-func (c *Compiler) compileQuoted() runtime.Value {
-	switch {
-	case c.parser.match(tokenizer.TokenAtom):
-		return runtime.MakeAtom(c.parser.previous.Val)
-	case c.parser.match(tokenizer.TokenNumber):
-		n := c.parser.parseNumber()
-		return runtime.MakeNumber(n)
-	case c.parser.match(tokenizer.TokenQuote):
-		c.parser.advance()
-		return c.compileQuoted()
-	case c.parser.match(tokenizer.TokenLeftParen):
-		if c.parser.match(tokenizer.TokenRightParen) {
-			return runtime.MakeNil()
-		}
-
-		list := runtime.MakePair(&runtime.Pair{})
-		var curr *runtime.Value = &list
-		for !c.parser.match(tokenizer.TokenRightParen) {
-			if c.parser.match(tokenizer.TokenDot) {
-				elem := c.compileQuoted()
-				*curr = elem
-				c.parser.consume(tokenizer.TokenRightParen)
-				break
-			}
-
-			elem := c.compileQuoted()
-			next := &runtime.Pair{Car: elem, Cdr: runtime.Nil}
-			*curr = runtime.MakePair(next)
-			curr = &next.Cdr
-		}
-		return list
-	default:
-		panic(c.parser.errorf("unexpected token: expected expression got: %v", c.parser.previous.Type))
 	}
 }
 
 // Define:
 //
 // "(" "define" atom expr ")"
-//
-// "(" is past
-// "define" is past.
-func (c *Compiler) compileDefine() {
-	c.parser.consume(tokenizer.TokenAtom)
-	name := c.parser.previous.Val
+func (c *Compiler) compileDefine(expr runtime.Value) {
+	name, value := c.extract2(expr, "define")
 
-	c.compileExpr(false) // Value
-	c.parser.consume(tokenizer.TokenRightParen)
+	if !name.IsAtom() {
+		panic(c.errorf("define expects an atom"))
+	}
+	c.defineName = name.AsAtom()
 
-	idx := c.addConstant(runtime.MakeAtom(name))
+	c.compileExpr(value, false)
+	idx := c.addConstant(name)
 	c.emitArg(runtime.OpDefineGlobal, idx)
 	c.emitArg(runtime.OpConstant, idx)
 }
@@ -372,51 +332,37 @@ func (c *Compiler) compileDefine() {
 // "(" "let" "(" ("(" atom expr ")")* ")" expr ")"
 // "(" "let*" "(" ("(" atom expr ")")* ")" expr ")"
 // "(" "letrec" "(" ("(" atom expr ")")* ")" expr ")"
-//
-// "(" is past
-// "let"/"let*"/"letrec" is past.
-func (c *Compiler) compileLet() {
+func (c *Compiler) compileLet(expr runtime.Value) {
 	panic(c.errorf("let expressions are not yet implemented"))
-	/*
-		var bindings []ast.Binding
-		c.parser.consume(tokenizer.TokenLeftParen)
-		for !c.parser.match(tokenizer.TokenRightParen) {
-			c.parser.consume(tokenizer.TokenLeftParen)
-			c.parser.consume(tokenizer.TokenAtom)
-			name := c.parser.previous.Val
-			c.parser.next()
-			value := c.compileExpr()
-			c.parser.consume(tokenizer.TokenRightParen)
-			c.parser.next()
-			bindings = append(bindings, ast.Binding{Name: name, Value: value})
-		}
-		c.parser.next()
-		body := c.compileExpr()
-		c.parser.consume(tokenizer.TokenRightParen)
-		return &ast.Let{Kind: kind, Bindings: bindings, Body: body}
-	*/
 }
 
 // Lambda:
 //
 // "(" "lambda" (atom | "(" expr* ("." expr)? ")") expr ")"
-//
-// "(" is past
-// "lambda" is past.
-func (c *Compiler) compileLambda() {
-	compiler := newCompiler(c, c.parser, c.parser.defineName)
-	switch {
-	case c.parser.match(tokenizer.TokenLeftParen):
-		compiler.compileStringList()
-	case c.parser.match(tokenizer.TokenAtom):
-		compiler.addLocal(compiler.parser.previous.Val)
-		compiler.function.HasRestParam = true
-	default:
-		panic(compiler.parser.errorf("unexpected lambda parameter: %v", compiler.parser.previous.Type))
+func (c *Compiler) compileLambda(expr runtime.Value) {
+	params, body := c.extract2(expr, "lambda")
+	compiler := newCompiler(c, c.defineName)
+
+	for params.IsPair() {
+		arg := params.AsPair()
+		if !arg.Car.IsAtom() {
+			panic(compiler.errorf("parameter expects atom"))
+		}
+		atom := arg.Car.AsAtom()
+		compiler.addLocal(atom)
+		compiler.function.Arity++
+		params = arg.Cdr
 	}
 
-	compiler.compileExpr(true) // Body
-	compiler.parser.consume(tokenizer.TokenRightParen)
+	if params.IsAtom() {
+		atom := params.AsAtom()
+		compiler.addLocal(atom)
+		compiler.function.HasRestParam = true
+	} else if !params.IsNil() {
+		panic(compiler.errorf("parameter expects atom"))
+	}
+
+	compiler.compileExpr(body, true)
 	function := compiler.end()
 	idx := c.addConstant(runtime.MakeFunction(function))
 	c.emitArg(runtime.OpClosure, idx)
@@ -425,49 +371,47 @@ func (c *Compiler) compileLambda() {
 // If:
 //
 // "(" "if" expr expr expr ")"
-//
-// "(" is past
-// "if" is past.
-func (c *Compiler) compileIf(tailPosition bool) {
-	c.compileExpr(false) // Condition
+func (c *Compiler) compileIf(expr runtime.Value, tailPosition bool) {
+	condition, thenBranch, elseBranch := c.extract3(expr, "if")
+
+	c.compileExpr(condition, false)
 	thenJump := c.emitJump(runtime.OpJumpIfFalse)
 	c.emit(runtime.OpPop)
 
-	c.compileExpr(tailPosition) // Then branch
+	c.compileExpr(thenBranch, tailPosition)
 	elseJump := c.emitJump(runtime.OpJump)
 	c.patchJump(thenJump)
 	c.emit(runtime.OpPop)
 
-	c.compileExpr(tailPosition) // Else branch
-	c.parser.consume(tokenizer.TokenRightParen)
+	c.compileExpr(elseBranch, tailPosition)
 	c.patchJump(elseJump)
 }
 
 // Cond:
 //
 // "(" "cond" ( "(" expr expr ")" )* ")"
-//
-// "(" is past
-// "cond" is past.
-func (c *Compiler) compileCond(tailPosition bool) {
-	if c.parser.match(tokenizer.TokenRightParen) {
-		c.emit(runtime.OpNil)
-		return
-	}
-
+func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
+	curr := expr
 	var endJumps []int
-	for !c.parser.match(tokenizer.TokenRightParen) {
-		c.parser.consume(tokenizer.TokenLeftParen)
-		c.compileExpr(false) // Condition
+
+	for !curr.IsNil() {
+		if !curr.IsPair() {
+			panic(c.errorf("cond expect a list of clauses"))
+		}
+		clause := curr.AsPair()
+		condition, value := c.extract2(clause.Car, "cond clause")
+
+		c.compileExpr(condition, false) // Condition
 		nextJump := c.emitJump(runtime.OpJumpIfFalse)
 		c.emit(runtime.OpPop)
 
-		c.compileExpr(tailPosition) // Value
-		c.parser.consume(tokenizer.TokenRightParen)
+		c.compileExpr(value, tailPosition) // Value
 		endJump := c.emitJump(runtime.OpJump)
 		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
 		c.emit(runtime.OpPop)
+
+		curr = clause.Cdr
 	}
 
 	c.emit(runtime.OpNil)
@@ -479,27 +423,31 @@ func (c *Compiler) compileCond(tailPosition bool) {
 // And:
 //
 // "(" "and" expr* ")"
-//
-// "(" is past
-// "and" is past.
-func (c *Compiler) compileAnd() {
-	if c.parser.match(tokenizer.TokenRightParen) {
+func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
+	if expr.IsNil() {
 		idx := c.addConstant(runtime.True)
 		c.emitArg(runtime.OpConstant, idx)
 		return
 	}
 
+	if !expr.IsPair() {
+		panic(c.errorf("and expects arguments"))
+	}
+	args := expr.AsPair()
+
 	var endJumps []int
-	for {
-		c.compileExpr(false)
-		if c.parser.match(tokenizer.TokenRightParen) {
-			break
-		}
+	for !args.Cdr.IsNil() {
+		c.compileExpr(args.Car, false)
 		endJump := c.emitJump(runtime.OpJumpIfFalse)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
+		if !args.Cdr.IsPair() {
+			panic(c.errorf("and expects arguments"))
+		}
+		args = args.Cdr.AsPair()
 	}
 
+	c.compileExpr(args.Car, tailPosition)
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -508,26 +456,30 @@ func (c *Compiler) compileAnd() {
 // Or:
 //
 // "(" "or" expr* ")"
-//
-// "(" is past
-// "or" is past.
-func (c *Compiler) compileOr() {
-	if c.parser.match(tokenizer.TokenRightParen) {
+func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
+	if expr.IsNil() {
 		c.emit(runtime.OpNil)
 		return
 	}
 
+	if !expr.IsPair() {
+		panic(c.errorf("or expects arguments"))
+	}
+	args := expr.AsPair()
+
 	var endJumps []int
-	for {
-		c.compileExpr(false)
-		if c.parser.match(tokenizer.TokenRightParen) {
-			break
-		}
+	for !args.Cdr.IsNil() {
+		c.compileExpr(args.Car, false)
 		endJump := c.emitJump(runtime.OpJumpIfTrue)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
+		if !args.Cdr.IsPair() {
+			panic(c.errorf("or expects arguments"))
+		}
+		args = args.Cdr.AsPair()
 	}
 
+	c.compileExpr(args.Car, tailPosition)
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -536,89 +488,47 @@ func (c *Compiler) compileOr() {
 // Set:
 //
 // "(" "set!" atom expr ")"
-//
-// "(" is past
-// "set!" is past.
-func (c *Compiler) compileSet() {
-	c.parser.consume(tokenizer.TokenAtom)
-	id := c.parser.previous.Val
+func (c *Compiler) compileSet(expr runtime.Value) {
+	target, value := c.extract2(expr, "set!")
+
+	if !target.IsAtom() {
+		panic(c.errorf("set! expects an atom"))
+	}
+	name := target.AsAtom()
 
 	var idx int
 	var op runtime.OpCode
-	if i, ok := c.resolveLocal(id); ok {
+	if i, ok := c.resolveLocal(name); ok {
 		idx = i
 		op = runtime.OpSetLocal
-	} else if i, ok := c.resolveUpvalue(id); ok {
+	} else if i, ok := c.resolveUpvalue(name); ok {
 		idx = i
 		op = runtime.OpSetUpvalue
 	} else {
-		idx = c.addConstant(runtime.MakeAtom(id))
+		idx = c.addConstant(target)
 		op = runtime.OpSetGlobal
 	}
 
-	c.compileExpr(false)
-	c.parser.consume(tokenizer.TokenRightParen)
+	c.compileExpr(value, false)
 	c.emitArg(op, idx)
 }
 
 // Begin:
 //
 // "(" "begin" expr* expr ")"
-//
-// "(" is past
-// "begin" is past.
-func (c *Compiler) compileBegin(tailPosition bool) {
-	if c.parser.match(tokenizer.TokenRightParen) {
-		c.emit(runtime.OpNil)
-		return
+func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
+	if !expr.IsPair() {
+		panic(c.errorf("begin expects arguments"))
 	}
+	args := expr.AsPair()
 
-	for !c.parser.match(tokenizer.TokenRightParen) {
-		// TODO: Fix the tail position calculation - we need to run
-		// c.compileExpr(tailPosition && next is TokenRightParen), but
-		// at this point, next is ALWAYS the last expression to be compiled
-		// c.compileExpr advances so that when it ends the compilation of the
-		// last expression, c.parser.current is TokenRightParen, the for loop
-		// check succeeds and the loop terminates.
-		c.compileExpr(tailPosition)
-	}
-}
-
-// String list:
-//
-// "(" atom* ("." atom)? ")"
-//
-// "(" is past
-//
-// This is not a part of the Lisp grammar, but the function is used
-// as a utility to parse a lambda function parameters.
-func (c *Compiler) compileStringList() {
-	for !c.parser.match(tokenizer.TokenRightParen) {
-		if c.parser.match(tokenizer.TokenDot) {
-			c.parser.consume(tokenizer.TokenAtom)
-			c.addLocal(c.parser.previous.Val)
-			c.function.HasRestParam = true
-			c.parser.consume(tokenizer.TokenRightParen)
-			break
+	for !args.Cdr.IsNil() {
+		c.compileExpr(args.Car, false)
+		if !args.Cdr.IsPair() {
+			panic(c.errorf("begin expects arguments"))
 		}
-
-		c.parser.consume(tokenizer.TokenAtom)
-		c.addLocal(c.parser.previous.Val)
-		c.function.Arity++
-	}
-}
-
-// Number:
-//
-// number literal.
-func (p *Parser) parseNumber() float64 {
-	if num, err := strconv.ParseInt(p.previous.Val, 0, 0); err == nil {
-		return float64(num)
+		args = args.Cdr.AsPair()
 	}
 
-	if num, err := strconv.ParseFloat(p.previous.Val, 64); err == nil {
-		return num
-	}
-
-	panic(p.errorf("illegal number syntax"))
+	c.compileExpr(args.Car, tailPosition)
 }

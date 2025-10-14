@@ -73,60 +73,41 @@ func MakeBuiltin(b *Builtin) Value {
 
 // Type checks
 
-func (v Value) IsNil() bool    { return v.typ == typeNil }
-func (v Value) IsNumber() bool { return v.typ == typeNumber }
-func (v Value) IsAtom() bool   { return v.typ == typeAtom }
-func (v Value) IsPair() bool   { return v.typ == typePair }
+func (v Value) IsNil() bool     { return v.typ == typeNil }
+func (v Value) IsNumber() bool  { return v.typ == typeNumber }
+func (v Value) IsAtom() bool    { return v.typ == typeAtom }
+func (v Value) IsPair() bool    { return v.typ == typePair }
+func (v Value) IsClosure() bool { return v.typ == typeClosure }
+func (v Value) IsBuiltin() bool { return v.typ == typeBuiltin }
 
 // Type casts
 
-func (v Value) AsNumber() (float64, bool) {
-	if v.typ != typeNumber {
-		return 0, false
-	}
-	return v.num, true
+func (v Value) AsNumber() float64 {
+	return v.num
 }
 
-func (v Value) AsAtom() (Atom, bool) {
-	if v.typ != typeAtom {
-		return EmptyAtom, false
-	}
-	return v.atom, true
+func (v Value) AsAtom() Atom {
+	return v.atom
 }
 
-func (v Value) AsPair() (*Pair, bool) {
-	if v.typ != typePair {
-		return nil, false
-	}
-	return (*Pair)(v.ptr), true
+func (v Value) AsPair() *Pair {
+	return (*Pair)(v.ptr)
 }
 
-func (v Value) AsUpvalue() (*Upvalue, bool) {
-	if v.typ != typeUpvalue {
-		return nil, false
-	}
-	return (*Upvalue)(v.ptr), true
+func (v Value) AsUpvalue() *Upvalue {
+	return (*Upvalue)(v.ptr)
 }
 
-func (v Value) AsFunction() (*Function, bool) {
-	if v.typ != typeFunction {
-		return nil, false
-	}
-	return (*Function)(v.ptr), true
+func (v Value) AsFunction() *Function {
+	return (*Function)(v.ptr)
 }
 
-func (v Value) AsClosure() (*Closure, bool) {
-	if v.typ != typeClosure {
-		return nil, false
-	}
-	return (*Closure)(v.ptr), true
+func (v Value) AsClosure() *Closure {
+	return (*Closure)(v.ptr)
 }
 
-func (v Value) AsBuiltin() (*Builtin, bool) {
-	if v.typ != typeBuiltin {
-		return nil, false
-	}
-	return (*Builtin)(v.ptr), true
+func (v Value) AsBuiltin() *Builtin {
+	return (*Builtin)(v.ptr)
 }
 
 var (
@@ -206,7 +187,8 @@ func (p *Pair) String() string {
 	curr := MakePair(p)
 	var sb strings.Builder
 	for sb.WriteByte('('); ; sb.WriteByte(' ') {
-		if cons, ok := curr.AsPair(); ok {
+		if curr.IsPair() {
+			cons := curr.AsPair()
 			sb.WriteString(cons.Car.String())
 			curr = cons.Cdr
 			if curr.IsNil() {

@@ -8,27 +8,24 @@ import (
 // varNumOp applies the given binary operation as a reducer
 // while assuming that at least one argument was provided.
 func varNumOp(args []Value, op func(float64, float64) float64) (Value, bool) {
-	result, ok := args[0].AsNumber()
-	if !ok {
+	if !args[0].IsNumber() {
 		return Nil, false
 	}
+	result := args[0].AsNumber()
 	for i := 1; i < len(args); i++ {
-		num, ok := args[i].AsNumber()
-		if !ok {
+		if !args[i].IsNumber() {
 			return Nil, false
 		}
-		result = op(result, num)
+		result = op(result, args[i].AsNumber())
 	}
 	return MakeNumber(result), true
 }
 
 func relNumOp(args []Value, op func(float64, float64) bool) (Value, bool) {
-	lNum, ok1 := args[0].AsNumber()
-	rNum, ok2 := args[1].AsNumber()
-	if !ok1 || !ok2 {
+	if !args[0].IsNumber() || !args[1].IsNumber() {
 		return Nil, false
 	}
-	if op(lNum, rNum) {
+	if op(args[0].AsNumber(), args[1].AsNumber()) {
 		return True, true
 	}
 	return Nil, true
@@ -41,17 +38,17 @@ func builtinCons(args []Value) (Value, error) {
 }
 
 func builtinCar(args []Value) (Value, error) {
-	if pair, ok := args[0].AsPair(); ok {
-		return pair.Car, nil
+	if !args[0].IsPair() {
+		return Nil, errors.New("car expects a pair")
 	}
-	return Nil, errors.New("car expects a pair")
+	return args[0].AsPair().Car, nil
 }
 
 func builtinCdr(args []Value) (Value, error) {
-	if pair, ok := args[0].AsPair(); ok {
-		return pair.Cdr, nil
+	if !args[0].IsPair() {
+		return Nil, errors.New("cdr expects a pair")
 	}
-	return Nil, errors.New("cdr expects a pair")
+	return args[0].AsPair().Cdr, nil
 }
 
 func builtinAdd(args []Value) (Value, error) {
@@ -64,11 +61,10 @@ func builtinAdd(args []Value) (Value, error) {
 
 func builtinSub(args []Value) (Value, error) {
 	if len(args) == 1 {
-		num, ok := args[0].AsNumber()
-		if !ok {
+		if !args[0].IsNumber() {
 			return Nil, errors.New("- is only defined for numbers")
 		}
-		return MakeNumber(-num), nil
+		return MakeNumber(-args[0].AsNumber()), nil
 	}
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc - n })
 	if !ok {
@@ -87,11 +83,10 @@ func builtinMul(args []Value) (Value, error) {
 
 func builtinDiv(args []Value) (Value, error) {
 	if len(args) == 1 {
-		num, ok := args[0].AsNumber()
-		if !ok {
+		if !args[0].IsNumber() {
 			return Nil, errors.New("/ is only defined for numbers")
 		}
-		return MakeNumber(1 / num), nil
+		return MakeNumber(1 / args[0].AsNumber()), nil
 	}
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc / n })
 	if !ok {
@@ -169,22 +164,20 @@ func builtinIsPair(args []Value) (Value, error) {
 }
 
 func builtinSetCar(args []Value) (Value, error) {
-	pair, ok := args[0].AsPair()
-	if !ok {
+	if !args[0].IsPair() {
 		return Nil, errors.New("set-car! expects a pair")
 	}
 	car := args[1]
-	pair.Car = car
+	args[0].AsPair().Car = car
 	return Nil, nil
 }
 
 func builtinSetCdr(args []Value) (Value, error) {
-	pair, ok := args[0].AsPair()
-	if !ok {
+	if !args[0].IsPair() {
 		return Nil, errors.New("set-cdr! expects a pair")
 	}
 	cdr := args[1]
-	pair.Cdr = cdr
+	args[0].AsPair().Cdr = cdr
 	return Nil, nil
 }
 
