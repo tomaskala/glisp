@@ -26,8 +26,9 @@ type Compiler struct {
 
 func newCompiler(parent *Compiler, name runtime.Atom) *Compiler {
 	return &Compiler{
-		parent:   parent,
-		function: &runtime.Function{Name: name},
+		parent:     parent,
+		defineName: runtime.EmptyAtom,
+		function:   &runtime.Function{Name: name},
 	}
 }
 
@@ -215,10 +216,13 @@ func (c *Compiler) compileProgram(name, source string) {
 	parser := &Parser{name: name, tokenizer: tokenizer}
 	parser.advance() // Initialize the first token.
 
-	for !parser.atEOF() {
+	for {
 		expr := parser.expression()
 		c.compileExpr(expr, false)
-		parser.advance()
+		if parser.atEOF() {
+			break
+		}
+		c.emit(runtime.OpPop)
 	}
 }
 
@@ -490,12 +494,12 @@ func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 //
 // "(" "set!" atom expr ")".
 func (c *Compiler) compileSet(expr runtime.Value) {
-	target, value := c.extract2(expr, "set!")
+	dest, value := c.extract2(expr, "set!")
 
-	if !target.IsAtom() {
+	if !dest.IsAtom() {
 		panic(c.errorf("set! expects an atom"))
 	}
-	name := target.AsAtom()
+	name := dest.AsAtom()
 
 	var idx int
 	var op runtime.OpCode
@@ -506,7 +510,7 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 		idx = i
 		op = runtime.OpSetUpvalue
 	} else {
-		idx = c.addConstant(target)
+		idx = c.addConstant(dest)
 		op = runtime.OpSetGlobal
 	}
 
@@ -525,6 +529,7 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, false)
+		c.emit(runtime.OpPop)
 
 		if !args.Cdr.IsPair() {
 			panic(c.errorf("begin expects arguments"))

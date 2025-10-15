@@ -44,8 +44,10 @@ func (p *Parser) expression() runtime.Value {
 			return runtime.MakeNil()
 		}
 
-		list := runtime.MakePair(&runtime.Pair{})
-		curr := &list
+		head := &runtime.Pair{Car: p.expression(), Cdr: runtime.Nil}
+		list := runtime.MakePair(head)
+		curr := &head.Cdr
+
 		for !p.match(tokenizer.TokenRightParen) {
 			if p.match(tokenizer.TokenDot) {
 				elem := p.expression()

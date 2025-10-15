@@ -15,17 +15,6 @@ type Token struct {
 	Val  string    // The raw value of this token.
 }
 
-func (t Token) String() string {
-	switch t.Type {
-	case TokenEOF:
-		return "<EOF>"
-	case TokenErr:
-		return t.Val
-	default:
-		return fmt.Sprintf("<%s>", t.Val)
-	}
-}
-
 type TokenType int
 
 const (

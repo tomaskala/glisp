@@ -665,9 +665,8 @@ func TestEdgeCases(t *testing.T) {
 		source   string
 		expected string
 	}{
-		{"empty_program", "", "()"},
 		{"multiple_expressions", "1 2 3", "3"},
-		{"nested_quotes", "''hello", "hello"},
+		{"nested_quotes", "''hello", "(quote hello)"},
 		{"zero_args_variadic", "((lambda args args))", "()"},
 		{"complex_let_nesting", `
 			(let ((x 1))
@@ -684,6 +683,22 @@ func TestEdgeCases(t *testing.T) {
 			if result.String() != tt.expected {
 				t.Errorf("Expected %s, got %s", tt.expected, result.String())
 			}
+		})
+	}
+}
+
+func TestEdgeCaseErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		expectedErr string
+	}{
+		{"empty_program", "", "unexpected token: expected expression, got TokenEOF"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectError(t, tt.source, tt.expectedErr)
 		})
 	}
 }

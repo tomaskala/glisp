@@ -1,7 +1,5 @@
 package runtime
 
-//go:generate stringer -output opcode_string.go -type OpCode
-
 import "math"
 
 type Chunk struct {
