@@ -45,7 +45,7 @@ func (p *Parser) expression() runtime.Value {
 		}
 
 		list := runtime.MakePair(&runtime.Pair{})
-		var curr *runtime.Value = &list
+		curr := &list
 		for !p.match(tokenizer.TokenRightParen) {
 			if p.match(tokenizer.TokenDot) {
 				elem := p.expression()
@@ -86,23 +86,12 @@ func (p *Parser) match(expected tokenizer.TokenType) bool {
 	return true
 }
 
-func (p *Parser) matchVal(expected string) bool {
-	if p.current.Val != expected {
-		return false
-	}
-	p.advance()
-	return true
-}
-
 func (p *Parser) consume(expected tokenizer.TokenType) {
 	if !p.match(expected) {
 		panic(p.errorf("unexpected token: expected %v, got %v", expected, p.current.Type))
 	}
 }
 
-// Number:
-//
-// number literal.
 func (p *Parser) parseNumber() float64 {
 	if num, err := strconv.ParseInt(p.previous.Val, 0, 0); err == nil {
 		return float64(num)

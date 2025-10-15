@@ -34,13 +34,13 @@ func newCompiler(parent *Compiler, name runtime.Atom) *Compiler {
 func (c *Compiler) errorf(format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
 	// TODO: Emit the current line
-	//return &CompileError{c.parser.current.Line, message}
+	// return &CompileError{c.parser.current.Line, message}
 	return &CompileError{1, message}
 }
 
 func (c *Compiler) emit(code runtime.OpCode) {
 	// TODO: Write the current line
-	//c.function.Chunk.Write(code, c.parser.previous.Line)
+	// c.function.Chunk.Write(code, c.parser.previous.Line)
 	c.function.Chunk.Write(code, 1)
 }
 
@@ -66,8 +66,9 @@ func (c *Compiler) end() *runtime.Function {
 
 func (c *Compiler) opcodeInt(n int) runtime.OpCode {
 	if n < runtime.OpCodeMin || runtime.OpCodeMax < n {
-		panic(c.errorf("program too large: constant/local index or a jump offset %d is out of bounds", n))
+		panic(c.errorf("program too large: constant index, local index or a jump offset %d is out of bounds", n))
 	}
+
 	return runtime.OpCode(n)
 }
 
@@ -78,6 +79,7 @@ func (c *Compiler) addConstant(constant runtime.Value) int {
 			return i
 		}
 	}
+
 	return c.function.Chunk.AddConstant(constant)
 }
 
@@ -91,6 +93,7 @@ func (c *Compiler) addUpvalue(idx int, isLocal bool) int {
 			return i
 		}
 	}
+
 	c.function.Upvalues = append(c.function.Upvalues, runtime.UpvalueSpec{Index: idx, IsLocal: isLocal})
 	return len(c.function.Upvalues) - 1
 }
@@ -101,6 +104,7 @@ func (c *Compiler) resolveLocal(name runtime.Atom) (int, bool) {
 			return i, true
 		}
 	}
+
 	return -1, false
 }
 
@@ -108,12 +112,15 @@ func (c *Compiler) resolveUpvalue(name runtime.Atom) (int, bool) {
 	if c.parent == nil {
 		return -1, false
 	}
+
 	if idx, ok := c.parent.resolveLocal(name); ok {
 		return c.addUpvalue(idx, true), true
 	}
+
 	if idx, ok := c.parent.resolveUpvalue(name); ok {
 		return c.addUpvalue(idx, false), true
 	}
+
 	return -1, false
 }
 
@@ -188,9 +195,12 @@ func Compile(name, source string) (prog *runtime.Program, err error) {
 				err = parseError
 			} else if compileError, ok := r.(*CompileError); ok {
 				err = compileError
+			} else {
+				err = fmt.Errorf("%v", r)
 			}
 		}
 	}()
+
 	compiler := newCompiler(nil, runtime.NewAtom(name))
 	compiler.compileProgram(name, source)
 	topLevel := compiler.end()
@@ -199,7 +209,7 @@ func Compile(name, source string) (prog *runtime.Program, err error) {
 
 // Program:
 //
-// expr*
+// expr*.
 func (c *Compiler) compileProgram(name, source string) {
 	tokenizer := tokenizer.NewTokenizer(source)
 	parser := &Parser{name: name, tokenizer: tokenizer}
@@ -214,7 +224,7 @@ func (c *Compiler) compileProgram(name, source string) {
 
 // Expr:
 //
-// nil | atom | number | pair
+// nil | atom | number | pair.
 func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
 	switch {
 	case expr.IsNil():
@@ -248,19 +258,13 @@ func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
 
 // Pair:
 //
-// "(" expr expr ")"
+// "(" expr expr ")".
 func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
 	switch pair.Car {
 	case runtime.MakeAtom("quote"):
 		c.compileQuote(pair.Cdr)
 	case runtime.MakeAtom("define"):
 		c.compileDefine(pair.Cdr)
-	case runtime.MakeAtom("let"):
-		c.compileLet(pair.Cdr)
-	case runtime.MakeAtom("let*"):
-		c.compileLet(pair.Cdr)
-	case runtime.MakeAtom("letrec"):
-		c.compileLet(pair.Cdr)
 	case runtime.MakeAtom("lambda"):
 		c.compileLambda(pair.Cdr)
 	case runtime.MakeAtom("if"):
@@ -279,13 +283,15 @@ func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
 		c.compileExpr(pair.Car, false) // Callee
 		args := pair.Cdr
 		argCount := 0
+
 		for !args.IsNil() {
 			if !args.IsPair() {
 				panic(c.errorf("function call expects a proper list"))
 			}
-			pair := args.AsPair()
-			c.compileExpr(pair.Car, false) // Argument
-			args = pair.Cdr
+			arg := args.AsPair()
+
+			c.compileExpr(arg.Car, false) // Argument
+			args = arg.Cdr
 			argCount++
 		}
 
@@ -299,9 +305,10 @@ func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
 
 // Quote:
 //
-// "(" "quote" expr ")"
+// "(" "quote" expr ")".
 func (c *Compiler) compileQuote(expr runtime.Value) {
 	quoted := c.extract1(expr, "quote")
+
 	if quoted.IsNil() {
 		c.emit(runtime.OpNil)
 	} else {
@@ -312,7 +319,7 @@ func (c *Compiler) compileQuote(expr runtime.Value) {
 
 // Define:
 //
-// "(" "define" atom expr ")"
+// "(" "define" atom expr ")".
 func (c *Compiler) compileDefine(expr runtime.Value) {
 	name, value := c.extract2(expr, "define")
 
@@ -327,18 +334,9 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 	c.emitArg(runtime.OpConstant, idx)
 }
 
-// Let:
-//
-// "(" "let" "(" ("(" atom expr ")")* ")" expr ")"
-// "(" "let*" "(" ("(" atom expr ")")* ")" expr ")"
-// "(" "letrec" "(" ("(" atom expr ")")* ")" expr ")"
-func (c *Compiler) compileLet(expr runtime.Value) {
-	panic(c.errorf("let expressions are not yet implemented"))
-}
-
 // Lambda:
 //
-// "(" "lambda" (atom | "(" expr* ("." expr)? ")") expr ")"
+// "(" "lambda" (atom | "(" expr* ")" | "(" expr+ "." expr ")") expr ")".
 func (c *Compiler) compileLambda(expr runtime.Value) {
 	params, body := c.extract2(expr, "lambda")
 	compiler := newCompiler(c, c.defineName)
@@ -349,6 +347,7 @@ func (c *Compiler) compileLambda(expr runtime.Value) {
 			panic(compiler.errorf("parameter expects atom"))
 		}
 		atom := arg.Car.AsAtom()
+
 		compiler.addLocal(atom)
 		compiler.function.Arity++
 		params = arg.Cdr
@@ -370,7 +369,7 @@ func (c *Compiler) compileLambda(expr runtime.Value) {
 
 // If:
 //
-// "(" "if" expr expr expr ")"
+// "(" "if" expr expr expr ")".
 func (c *Compiler) compileIf(expr runtime.Value, tailPosition bool) {
 	condition, thenBranch, elseBranch := c.extract3(expr, "if")
 
@@ -389,7 +388,7 @@ func (c *Compiler) compileIf(expr runtime.Value, tailPosition bool) {
 
 // Cond:
 //
-// "(" "cond" ( "(" expr expr ")" )* ")"
+// "(" "cond" ( "(" expr expr ")" )* ")".
 func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 	curr := expr
 	var endJumps []int
@@ -401,11 +400,11 @@ func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 		clause := curr.AsPair()
 		condition, value := c.extract2(clause.Car, "cond clause")
 
-		c.compileExpr(condition, false) // Condition
+		c.compileExpr(condition, false)
 		nextJump := c.emitJump(runtime.OpJumpIfFalse)
 		c.emit(runtime.OpPop)
 
-		c.compileExpr(value, tailPosition) // Value
+		c.compileExpr(value, tailPosition)
 		endJump := c.emitJump(runtime.OpJump)
 		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
@@ -422,7 +421,7 @@ func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 
 // And:
 //
-// "(" "and" expr* ")"
+// "(" "and" expr* ")".
 func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 	if expr.IsNil() {
 		idx := c.addConstant(runtime.True)
@@ -434,13 +433,14 @@ func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 		panic(c.errorf("and expects arguments"))
 	}
 	args := expr.AsPair()
-
 	var endJumps []int
+
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, false)
 		endJump := c.emitJump(runtime.OpJumpIfFalse)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
+
 		if !args.Cdr.IsPair() {
 			panic(c.errorf("and expects arguments"))
 		}
@@ -455,7 +455,7 @@ func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 
 // Or:
 //
-// "(" "or" expr* ")"
+// "(" "or" expr* ")".
 func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 	if expr.IsNil() {
 		c.emit(runtime.OpNil)
@@ -466,13 +466,14 @@ func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 		panic(c.errorf("or expects arguments"))
 	}
 	args := expr.AsPair()
-
 	var endJumps []int
+
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, false)
 		endJump := c.emitJump(runtime.OpJumpIfTrue)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
+
 		if !args.Cdr.IsPair() {
 			panic(c.errorf("or expects arguments"))
 		}
@@ -487,7 +488,7 @@ func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 
 // Set:
 //
-// "(" "set!" atom expr ")"
+// "(" "set!" atom expr ")".
 func (c *Compiler) compileSet(expr runtime.Value) {
 	target, value := c.extract2(expr, "set!")
 
@@ -515,7 +516,7 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 
 // Begin:
 //
-// "(" "begin" expr* expr ")"
+// "(" "begin" expr+ ")".
 func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 	if !expr.IsPair() {
 		panic(c.errorf("begin expects arguments"))
@@ -524,6 +525,7 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, false)
+
 		if !args.Cdr.IsPair() {
 			panic(c.errorf("begin expects arguments"))
 		}

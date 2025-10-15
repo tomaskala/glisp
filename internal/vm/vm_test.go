@@ -5,19 +5,13 @@ import (
 	"testing"
 
 	"tomaskala.com/glisp/internal/compiler"
-	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/runtime"
 )
 
 func evalExpr(t *testing.T, source string) runtime.Value {
 	t.Helper()
 
-	program, err := parser.Parse("test", source)
-	if err != nil {
-		t.Fatalf("Parsing failed: %v", err)
-	}
-
-	compiledProgram, err := compiler.Compile("test", program)
+	compiledProgram, err := compiler.Compile("test", source)
 	if err != nil {
 		t.Fatalf("Compilation failed: %v", err)
 	}
@@ -45,15 +39,7 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 func expectError(t *testing.T, source string, expectedErrorSubstring string) {
 	t.Helper()
 
-	program, err := parser.Parse("test", source)
-	if err != nil {
-		if strings.Contains(err.Error(), expectedErrorSubstring) {
-			return
-		}
-		t.Fatalf("Unexpected parsing error: %v", err)
-	}
-
-	compiledProgram, err := compiler.Compile("test", program)
+	compiledProgram, err := compiler.Compile("test", source)
 	if err != nil {
 		if strings.Contains(err.Error(), expectedErrorSubstring) {
 			return
@@ -804,8 +790,7 @@ func TestErrorRecovery(t *testing.T) {
 
 		// First, cause an error
 		program1 := "a" // References an undefined atom.
-		ast1, _ := parser.Parse("test", program1)
-		compiled1, _ := compiler.Compile("test", ast1)
+		compiled1, _ := compiler.Compile("test", program1)
 
 		_, err := vm.Run(compiled1)
 		if err == nil {
@@ -822,8 +807,7 @@ func TestErrorRecovery(t *testing.T) {
 
 		// Should be able to run another program successfully
 		program2 := "(+ 2 3)"
-		ast2, _ := parser.Parse("test", program2)
-		compiled2, _ := compiler.Compile("test", ast2)
+		compiled2, _ := compiler.Compile("test", program2)
 
 		result, err := vm.Run(compiled2)
 		if err != nil {

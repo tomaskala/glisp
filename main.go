@@ -60,7 +60,7 @@ func runRepl() int {
 		AutoComplete: completer,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening a REPL: %v", err)
+		fmt.Fprintf(os.Stderr, "error opening REPL: %v", err)
 		return exitIoError
 	}
 	defer rl.Close()
@@ -98,7 +98,7 @@ func runRepl() int {
 		compiledProgram, err := compiler.Compile("REPL", strings.Join(lines, " "))
 		reset()
 		if err != nil {
-			fmt.Fprintf(rl.Stderr(), "Compile error: %v\n", err)
+			fmt.Fprintf(rl.Stderr(), "compile error: %v\n", err)
 			continue
 		}
 
@@ -108,7 +108,7 @@ func runRepl() int {
 
 		result, err := evaluator.Run(compiledProgram)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 			continue
 		}
 		fmt.Println(result)
@@ -120,7 +120,7 @@ func runRepl() int {
 func runScript(path string) int {
 	source, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening %s: %v", path, err)
+		fmt.Fprintf(os.Stderr, "error opening %s: %v", path, err)
 		return exitIoError
 	}
 
