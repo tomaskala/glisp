@@ -18,17 +18,15 @@ func (e *CompileError) Error() string {
 }
 
 type Compiler struct {
-	parent     *Compiler         // The enclosing compiler, if any.
-	defineName runtime.Atom      // Stored from the latest encountered "define", spliced into lambdas.
-	function   *runtime.Function // The function currently being compiled.
-	locals     []runtime.Atom    // Local variables of the function.
+	parent   *Compiler         // The enclosing compiler, if any.
+	function *runtime.Function // The function currently being compiled.
+	locals   []runtime.Atom    // Local variables of the function.
 }
 
 func newCompiler(parent *Compiler, name runtime.Atom) *Compiler {
 	return &Compiler{
-		parent:     parent,
-		defineName: runtime.EmptyAtom,
-		function:   &runtime.Function{Name: name},
+		parent:   parent,
+		function: &runtime.Function{Name: name},
 	}
 }
 
@@ -218,7 +216,7 @@ func (c *Compiler) compileProgram(name, source string) {
 
 	for {
 		expr := parser.expression()
-		c.compileExpr(expr, false)
+		c.compileExpr(expr, runtime.EmptyAtom, false)
 		if parser.atEOF() {
 			break
 		}
@@ -229,7 +227,7 @@ func (c *Compiler) compileProgram(name, source string) {
 // Expr:
 //
 // nil | atom | number | pair.
-func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
+func (c *Compiler) compileExpr(expr runtime.Value, nameHint runtime.Atom, tailPosition bool) {
 	switch {
 	case expr.IsNil():
 		c.emit(runtime.OpNil)
@@ -254,7 +252,7 @@ func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
 		idx := c.addConstant(expr)
 		c.emitArg(runtime.OpConstant, idx)
 	case expr.IsPair():
-		c.compilePair(expr.AsPair(), tailPosition)
+		c.compilePair(expr.AsPair(), nameHint, tailPosition)
 	default:
 		panic(c.errorf("unexpected expression: %v", expr))
 	}
@@ -263,14 +261,14 @@ func (c *Compiler) compileExpr(expr runtime.Value, tailPosition bool) {
 // Pair:
 //
 // "(" expr expr ")".
-func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
+func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPosition bool) {
 	switch pair.Car {
 	case runtime.MakeAtom("quote"):
 		c.compileQuote(pair.Cdr)
 	case runtime.MakeAtom("define"):
 		c.compileDefine(pair.Cdr)
 	case runtime.MakeAtom("lambda"):
-		c.compileLambda(pair.Cdr)
+		c.compileLambda(pair.Cdr, nameHint)
 	case runtime.MakeAtom("if"):
 		c.compileIf(pair.Cdr, tailPosition)
 	case runtime.MakeAtom("cond"):
@@ -284,7 +282,7 @@ func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
 	case runtime.MakeAtom("begin"):
 		c.compileBegin(pair.Cdr, tailPosition)
 	default:
-		c.compileExpr(pair.Car, false) // Callee
+		c.compileExpr(pair.Car, runtime.EmptyAtom, false) // Callee
 		args := pair.Cdr
 		argCount := 0
 
@@ -294,7 +292,7 @@ func (c *Compiler) compilePair(pair *runtime.Pair, tailPosition bool) {
 			}
 			arg := args.AsPair()
 
-			c.compileExpr(arg.Car, false) // Argument
+			c.compileExpr(arg.Car, runtime.EmptyAtom, false) // Argument
 			args = arg.Cdr
 			argCount++
 		}
@@ -330,9 +328,8 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 	if !name.IsAtom() {
 		panic(c.errorf("define expects an atom"))
 	}
-	c.defineName = name.AsAtom()
 
-	c.compileExpr(value, false)
+	c.compileExpr(value, name.AsAtom(), false)
 	idx := c.addConstant(name)
 	c.emitArg(runtime.OpDefineGlobal, idx)
 	c.emitArg(runtime.OpConstant, idx)
@@ -341,9 +338,9 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 // Lambda:
 //
 // "(" "lambda" (atom | "(" expr* ")" | "(" expr+ "." expr ")") expr ")".
-func (c *Compiler) compileLambda(expr runtime.Value) {
+func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	params, body := c.extract2(expr, "lambda")
-	compiler := newCompiler(c, c.defineName)
+	compiler := newCompiler(c, nameHint)
 
 	for params.IsPair() {
 		arg := params.AsPair()
@@ -365,7 +362,7 @@ func (c *Compiler) compileLambda(expr runtime.Value) {
 		panic(compiler.errorf("parameter expects atom"))
 	}
 
-	compiler.compileExpr(body, true)
+	compiler.compileExpr(body, runtime.EmptyAtom, true)
 	function := compiler.end()
 	idx := c.addConstant(runtime.MakeFunction(function))
 	c.emitArg(runtime.OpClosure, idx)
@@ -377,16 +374,16 @@ func (c *Compiler) compileLambda(expr runtime.Value) {
 func (c *Compiler) compileIf(expr runtime.Value, tailPosition bool) {
 	condition, thenBranch, elseBranch := c.extract3(expr, "if")
 
-	c.compileExpr(condition, false)
+	c.compileExpr(condition, runtime.EmptyAtom, false)
 	thenJump := c.emitJump(runtime.OpJumpIfFalse)
 	c.emit(runtime.OpPop)
 
-	c.compileExpr(thenBranch, tailPosition)
+	c.compileExpr(thenBranch, runtime.EmptyAtom, tailPosition)
 	elseJump := c.emitJump(runtime.OpJump)
 	c.patchJump(thenJump)
 	c.emit(runtime.OpPop)
 
-	c.compileExpr(elseBranch, tailPosition)
+	c.compileExpr(elseBranch, runtime.EmptyAtom, tailPosition)
 	c.patchJump(elseJump)
 }
 
@@ -404,11 +401,11 @@ func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 		clause := curr.AsPair()
 		condition, value := c.extract2(clause.Car, "cond clause")
 
-		c.compileExpr(condition, false)
+		c.compileExpr(condition, runtime.EmptyAtom, false)
 		nextJump := c.emitJump(runtime.OpJumpIfFalse)
 		c.emit(runtime.OpPop)
 
-		c.compileExpr(value, tailPosition)
+		c.compileExpr(value, runtime.EmptyAtom, tailPosition)
 		endJump := c.emitJump(runtime.OpJump)
 		endJumps = append(endJumps, endJump)
 		c.patchJump(nextJump)
@@ -440,7 +437,7 @@ func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 	var endJumps []int
 
 	for !args.Cdr.IsNil() {
-		c.compileExpr(args.Car, false)
+		c.compileExpr(args.Car, runtime.EmptyAtom, false)
 		endJump := c.emitJump(runtime.OpJumpIfFalse)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
@@ -451,7 +448,7 @@ func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 		args = args.Cdr.AsPair()
 	}
 
-	c.compileExpr(args.Car, tailPosition)
+	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -473,7 +470,7 @@ func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 	var endJumps []int
 
 	for !args.Cdr.IsNil() {
-		c.compileExpr(args.Car, false)
+		c.compileExpr(args.Car, runtime.EmptyAtom, false)
 		endJump := c.emitJump(runtime.OpJumpIfTrue)
 		endJumps = append(endJumps, endJump)
 		c.emit(runtime.OpPop)
@@ -484,7 +481,7 @@ func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 		args = args.Cdr.AsPair()
 	}
 
-	c.compileExpr(args.Car, tailPosition)
+	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
 	for _, jump := range endJumps {
 		c.patchJump(jump)
 	}
@@ -514,7 +511,7 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 		op = runtime.OpSetGlobal
 	}
 
-	c.compileExpr(value, false)
+	c.compileExpr(value, runtime.EmptyAtom, false)
 	c.emitArg(op, idx)
 }
 
@@ -528,7 +525,7 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 	args := expr.AsPair()
 
 	for !args.Cdr.IsNil() {
-		c.compileExpr(args.Car, false)
+		c.compileExpr(args.Car, runtime.EmptyAtom, false)
 		c.emit(runtime.OpPop)
 
 		if !args.Cdr.IsPair() {
@@ -537,5 +534,5 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 		args = args.Cdr.AsPair()
 	}
 
-	c.compileExpr(args.Car, tailPosition)
+	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
 }
