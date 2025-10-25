@@ -1,4 +1,4 @@
-package vm
+package test
 
 import (
 	"strings"
@@ -6,6 +6,7 @@ import (
 
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/runtime"
+	"tomaskala.com/glisp/internal/vm"
 )
 
 func evalExpr(t *testing.T, source string) runtime.Value {
@@ -16,21 +17,21 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 		t.Fatalf("Compilation failed: %v", err)
 	}
 
-	vm := NewVM()
-	result, err := vm.Run(compiledProgram)
+	evaluator := vm.NewVM()
+	result, err := evaluator.Run(compiledProgram)
 	if err != nil {
 		t.Fatalf("VM execution failed: %v", err)
 	}
 
 	// Assert VM state is clean after evaluation
-	if vm.stackTop != 0 {
-		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(vm.stack))
+	if evaluator.StackTop != 0 {
+		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(evaluator.Stack))
 	}
-	if vm.numFrames != 0 {
-		t.Errorf("VM frames not empty after evaluation: %d frames remaining", vm.numFrames)
+	if evaluator.NumFrames != 0 {
+		t.Errorf("VM frames not empty after evaluation: %d frames remaining", evaluator.NumFrames)
 	}
-	if len(vm.openUpvalues) != 0 {
-		t.Errorf("VM open upvalues not empty after evaluation: %d upvalues remaining", len(vm.openUpvalues))
+	if len(evaluator.OpenUpvalues) != 0 {
+		t.Errorf("VM open upvalues not empty after evaluation: %d upvalues remaining", len(evaluator.OpenUpvalues))
 	}
 
 	return result
@@ -47,8 +48,8 @@ func expectError(t *testing.T, source string, expectedErrorSubstring string) {
 		t.Fatalf("Unexpected compilation error: %v", err)
 	}
 
-	vm := NewVM()
-	_, err = vm.Run(compiledProgram)
+	evaluator := vm.NewVM()
+	_, err = evaluator.Run(compiledProgram)
 	if err != nil {
 		if strings.Contains(err.Error(), expectedErrorSubstring) {
 			return
@@ -659,7 +660,7 @@ func TestComplexPrograms(t *testing.T) {
 	}
 }
 
-func TestEdgeCases(t *testing.T) {
+func TestVMEdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
 		source   string
@@ -801,30 +802,30 @@ func TestMemoryAndGarbageCollection(t *testing.T) {
 func TestErrorRecovery(t *testing.T) {
 	// Test that VM properly resets state after errors
 	t.Run("error_recovery", func(t *testing.T) {
-		vm := NewVM()
+		evaluator := vm.NewVM()
 
 		// First, cause an error
 		program1 := "a" // References an undefined atom.
 		compiled1, _ := compiler.Compile("test", program1)
 
-		_, err := vm.Run(compiled1)
+		_, err := evaluator.Run(compiled1)
 		if err == nil {
 			t.Error("Expected division by zero error")
 		}
 
 		// VM should be reset and ready for next program
-		if vm.stackTop != 0 {
-			t.Errorf("VM stack not reset after error: %d items", len(vm.stack))
+		if evaluator.StackTop != 0 {
+			t.Errorf("VM stack not reset after error: %d items", len(evaluator.Stack))
 		}
-		if vm.numFrames != 0 {
-			t.Errorf("VM frames not reset after error: %d frames", vm.numFrames)
+		if evaluator.NumFrames != 0 {
+			t.Errorf("VM frames not reset after error: %d frames", evaluator.NumFrames)
 		}
 
 		// Should be able to run another program successfully
 		program2 := "(+ 2 3)"
 		compiled2, _ := compiler.Compile("test", program2)
 
-		result, err := vm.Run(compiled2)
+		result, err := evaluator.Run(compiled2)
 		if err != nil {
 			t.Errorf("Unexpected error on second program: %v", err)
 		}
