@@ -32,8 +32,10 @@ var basicTokenTests = map[string]struct {
 	"right paren": {")", tokenizer.Token{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"}},
 
 	// Special characters
-	"dot":   {".", tokenizer.Token{Type: tokenizer.TokenDot, Line: 1, Val: "."}},
-	"quote": {"'", tokenizer.Token{Type: tokenizer.TokenQuote, Line: 1, Val: "'"}},
+	"dot":       {".", tokenizer.Token{Type: tokenizer.TokenDot, Line: 1, Val: "."}},
+	"quote":     {"'", tokenizer.Token{Type: tokenizer.TokenQuote, Line: 1, Val: "'"}},
+	"backquote": {"`", tokenizer.Token{Type: tokenizer.TokenBackquote, Line: 1, Val: "`"}},
+	"comma":     {",", tokenizer.Token{Type: tokenizer.TokenComma, Line: 1, Val: ","}},
 
 	// Basic atoms
 	"simple atom":        {"hello", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "hello"}},
@@ -260,6 +262,27 @@ var sequenceTests = map[string]struct {
 			{Type: tokenizer.TokenQuote, Line: 1, Val: "'"},
 			{Type: tokenizer.TokenDot, Line: 1, Val: "."},
 			{Type: tokenizer.TokenQuote, Line: 1, Val: "'"},
+			{Type: tokenizer.TokenEOF, Line: 1, Val: "EOF"},
+		},
+	},
+	"backquoted expression": {
+		source: "`(a ,b (c ,d) (e f))",
+		tokens: []tokenizer.Token{
+			{Type: tokenizer.TokenBackquote, Line: 1, Val: "`"},
+			{Type: tokenizer.TokenLeftParen, Line: 1, Val: "("},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "a"},
+			{Type: tokenizer.TokenComma, Line: 1, Val: ","},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "b"},
+			{Type: tokenizer.TokenLeftParen, Line: 1, Val: "("},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "c"},
+			{Type: tokenizer.TokenComma, Line: 1, Val: ","},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "d"},
+			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
+			{Type: tokenizer.TokenLeftParen, Line: 1, Val: "("},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "e"},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "f"},
+			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
+			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
 			{Type: tokenizer.TokenEOF, Line: 1, Val: "EOF"},
 		},
 	},

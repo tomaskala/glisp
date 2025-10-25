@@ -55,6 +55,8 @@ func (p *Parser) expression() runtime.Value {
 	case p.match(tokenizer.TokenQuote):
 		quoted := p.expression()
 		return runtime.Cons(runtime.MakeAtom("quote"), runtime.Cons(quoted, runtime.MakeNil()))
+	case p.match(tokenizer.TokenBackquote):
+		return p.backquote()
 	case p.match(tokenizer.TokenLeftParen):
 		if p.match(tokenizer.TokenRightParen) {
 			return runtime.MakeNil()
@@ -120,4 +122,26 @@ func (p *Parser) parseNumber() float64 {
 	}
 
 	panic(p.errorf("illegal number syntax"))
+}
+
+func (p *Parser) backquote() runtime.Value {
+	switch {
+	case p.match(tokenizer.TokenLeftParen):
+		return runtime.Cons(runtime.MakeAtom("list"), p.quotedList())
+	case p.match(tokenizer.TokenComma):
+		return p.expression()
+	default:
+		quoted := p.expression()
+		return runtime.Cons(runtime.MakeAtom("quote"), runtime.Cons(quoted, runtime.MakeNil()))
+	}
+}
+
+func (p *Parser) quotedList() runtime.Value {
+	switch {
+	case p.match(tokenizer.TokenRightParen):
+		return runtime.MakeNil()
+	default:
+		elem := p.backquote()
+		return runtime.Cons(elem, p.quotedList())
+	}
 }
