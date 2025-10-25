@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"tomaskala.com/glisp/internal/runtime"
-	"tomaskala.com/glisp/internal/tokenizer"
+	"tomaskala.com/glisp/internal/vm"
 )
 
 type CompileError struct {
@@ -21,12 +21,18 @@ type Compiler struct {
 	parent   *Compiler         // The enclosing compiler, if any.
 	function *runtime.Function // The function currently being compiled.
 	locals   []runtime.Atom    // Local variables of the function.
+	vm       *vm.VM            // The evaluator used for macro expansion.
 }
 
-func newCompiler(parent *Compiler, name runtime.Atom) *Compiler {
+func NewCompiler(name string, vm *vm.VM) *Compiler {
+	return newCompiler(nil, runtime.NewAtom(name), vm)
+}
+
+func newCompiler(parent *Compiler, name runtime.Atom, vm *vm.VM) *Compiler {
 	return &Compiler{
 		parent:   parent,
 		function: &runtime.Function{Name: name},
+		vm:       vm,
 	}
 }
 
@@ -60,7 +66,10 @@ func (c *Compiler) patchJump(offset int) {
 
 func (c *Compiler) end() *runtime.Function {
 	c.emit(runtime.OpReturn)
-	return c.function
+	result := c.function
+	c.function = &runtime.Function{Name: c.function.Name}
+	c.locals = nil
+	return result
 }
 
 func (c *Compiler) opcodeInt(n int) runtime.OpCode {
@@ -187,41 +196,16 @@ func (c *Compiler) extract3(expr runtime.Value, name string) (runtime.Value, run
 }
 
 // TODO: (+) should return 0 and (*) should return 1 (no change for (-) and (/))
-func Compile(name, source string) (prog *runtime.Program, err error) {
+func (c *Compiler) Compile(expr runtime.Value) (prog *runtime.Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			if parseError, ok := r.(*ParseError); ok {
-				err = parseError
-			} else if compileError, ok := r.(*CompileError); ok {
-				err = compileError
-			} else {
-				err = fmt.Errorf("%v", r)
-			}
+			err = r.(*CompileError)
 		}
 	}()
 
-	compiler := newCompiler(nil, runtime.NewAtom(name))
-	compiler.compileProgram(name, source)
-	topLevel := compiler.end()
-	return &runtime.Program{Function: topLevel}, err
-}
-
-// Program:
-//
-// expr*.
-func (c *Compiler) compileProgram(name, source string) {
-	tokenizer := tokenizer.NewTokenizer(source)
-	parser := &Parser{name: name, tokenizer: tokenizer}
-	parser.advance() // Initialize the first token.
-
-	for {
-		expr := parser.expression()
-		c.compileExpr(expr, runtime.EmptyAtom, false)
-		if parser.atEOF() {
-			break
-		}
-		c.emit(runtime.OpPop)
-	}
+	c.compileExpr(expr, runtime.EmptyAtom, false)
+	function := c.end()
+	return &runtime.Program{Function: function}, err
 }
 
 // Expr:
@@ -269,6 +253,8 @@ func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPo
 		c.compileDefine(pair.Cdr)
 	case runtime.MakeAtom("lambda"):
 		c.compileLambda(pair.Cdr, nameHint)
+	case runtime.MakeAtom("macro"):
+		c.compileMacro(pair.Cdr, nameHint)
 	case runtime.MakeAtom("if"):
 		c.compileIf(pair.Cdr, tailPosition)
 	case runtime.MakeAtom("cond"):
@@ -282,6 +268,14 @@ func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPo
 	case runtime.MakeAtom("begin"):
 		c.compileBegin(pair.Cdr, tailPosition)
 	default:
+		// Macro expansion.
+		if m := c.getMacro(pair.Car); m != nil {
+			expanded := c.expandMacro(m, pair.Cdr)
+			c.compileExpr(expanded, nameHint, tailPosition)
+			return
+		}
+
+		// Function call.
 		c.compileExpr(pair.Car, runtime.EmptyAtom, false) // Callee
 		args := pair.Cdr
 		argCount := 0
@@ -340,18 +334,18 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 // "(" "lambda" (atom | "(" expr* ")" | "(" expr+ "." expr ")") expr ")".
 func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	params, body := c.extract2(expr, "lambda")
-	compiler := newCompiler(c, nameHint)
+	compiler := newCompiler(c, nameHint, c.vm)
 
 	for params.IsPair() {
-		arg := params.AsPair()
-		if !arg.Car.IsAtom() {
-			panic(compiler.errorf("parameter expects atom"))
+		param := params.AsPair()
+		if !param.Car.IsAtom() {
+			panic(compiler.errorf("function parameter expects atom"))
 		}
-		atom := arg.Car.AsAtom()
+		atom := param.Car.AsAtom()
 
 		compiler.addLocal(atom)
 		compiler.function.Arity++
-		params = arg.Cdr
+		params = param.Cdr
 	}
 
 	if params.IsAtom() {
@@ -359,7 +353,7 @@ func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 		compiler.addLocal(atom)
 		compiler.function.HasRestParam = true
 	} else if !params.IsNil() {
-		panic(compiler.errorf("parameter expects atom"))
+		panic(compiler.errorf("function parameter expects atom"))
 	}
 
 	compiler.compileExpr(body, runtime.EmptyAtom, true)

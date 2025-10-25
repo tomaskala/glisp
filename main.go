@@ -13,14 +13,16 @@ import (
 
 	"github.com/chzyer/readline"
 	"tomaskala.com/glisp/internal/compiler"
+	"tomaskala.com/glisp/internal/parser"
+	glispruntime "tomaskala.com/glisp/internal/runtime"
+	"tomaskala.com/glisp/internal/tokenizer"
 	"tomaskala.com/glisp/internal/vm"
 )
 
 const (
 	exitSuccess      = 0
 	exitIoError      = 1
-	exitCompileError = 2
-	exitRuntimeError = 3
+	exitRuntimeError = 2
 
 	prompt = "λ "
 )
@@ -51,6 +53,36 @@ func balancedParentheses(lines []string) bool {
 		}
 	}
 	return len(stack) == 0
+}
+
+func evaluate(evaluator *vm.VM, name, source string, out io.Writer) (glispruntime.Value, error) {
+	t := tokenizer.NewTokenizer(source)
+	p := parser.NewParser(name, t)
+	c := compiler.NewCompiler(name, evaluator)
+	result := glispruntime.MakeNil()
+
+	for !p.AtEOF() {
+		expr, err := p.Expression()
+		if err != nil {
+			return result, err
+		}
+
+		program, err := c.Compile(expr)
+		if err != nil {
+			return result, err
+		}
+
+		if *disassemble {
+			compiler.Disassemble(program, out)
+		}
+
+		result, err = evaluator.Run(program)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	return result, nil
 }
 
 func runRepl() int {
@@ -95,22 +127,15 @@ func runRepl() int {
 			continue
 		}
 
-		compiledProgram, err := compiler.Compile("REPL", strings.Join(lines, " "))
+		source := strings.Join(lines, " ")
 		reset()
+
+		result, err := evaluate(evaluator, "REPL", source, rl.Stdout())
 		if err != nil {
-			fmt.Fprintf(rl.Stderr(), "compile error: %v\n", err)
+			fmt.Fprintln(rl.Stderr(), err)
 			continue
 		}
 
-		if *disassemble {
-			compiler.Disassemble(compiledProgram, rl.Stderr())
-		}
-
-		result, err := evaluator.Run(compiledProgram)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
-			continue
-		}
 		fmt.Println(result)
 	}
 
@@ -124,18 +149,8 @@ func runScript(path string) int {
 		return exitIoError
 	}
 
-	compiledProgram, err := compiler.Compile(path, string(source))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return exitCompileError
-	}
-
-	if *disassemble {
-		compiler.Disassemble(compiledProgram, os.Stderr)
-	}
-
 	evaluator := vm.NewVM()
-	_, err = evaluator.Run(compiledProgram)
+	_, err = evaluate(evaluator, path, string(source), os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return exitRuntimeError

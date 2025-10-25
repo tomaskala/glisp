@@ -1,4 +1,4 @@
-package compiler
+package parser
 
 import (
 	"fmt"
@@ -24,8 +24,24 @@ type Parser struct {
 	tokenizer *tokenizer.Tokenizer // The underlying tokenizer.
 }
 
-func (p *Parser) atEOF() bool {
+func NewParser(name string, tokenizer *tokenizer.Tokenizer) *Parser {
+	p := &Parser{name: name, tokenizer: tokenizer}
+	p.advance() // Initialize the first token.
+	return p
+}
+
+func (p *Parser) AtEOF() bool {
 	return p.match(tokenizer.TokenEOF)
+}
+
+func (p *Parser) Expression() (result runtime.Value, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(*ParseError)
+		}
+	}()
+
+	return p.expression(), nil
 }
 
 // TODO: We need to inject line number information to each runtime.Value.

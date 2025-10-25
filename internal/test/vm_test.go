@@ -5,20 +5,43 @@ import (
 	"testing"
 
 	"tomaskala.com/glisp/internal/compiler"
+	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/runtime"
+	"tomaskala.com/glisp/internal/tokenizer"
 	"tomaskala.com/glisp/internal/vm"
 )
+
+func evaluate(evaluator *vm.VM, source string) (runtime.Value, error) {
+	t := tokenizer.NewTokenizer(source)
+	p := parser.NewParser("test", t)
+	c := compiler.NewCompiler("test", evaluator)
+	result := runtime.MakeNil()
+
+	for !p.AtEOF() {
+		expr, err := p.Expression()
+		if err != nil {
+			return result, err
+		}
+
+		program, err := c.Compile(expr)
+		if err != nil {
+			return result, err
+		}
+
+		result, err = evaluator.Run(program)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	return result, nil
+}
 
 func evalExpr(t *testing.T, source string) runtime.Value {
 	t.Helper()
 
-	compiledProgram, err := compiler.Compile("test", source)
-	if err != nil {
-		t.Fatalf("Compilation failed: %v", err)
-	}
-
 	evaluator := vm.NewVM()
-	result, err := evaluator.Run(compiledProgram)
+	result, err := evaluate(evaluator, source)
 	if err != nil {
 		t.Fatalf("VM execution failed: %v", err)
 	}
@@ -40,21 +63,13 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 func expectError(t *testing.T, source string, expectedErrorSubstring string) {
 	t.Helper()
 
-	compiledProgram, err := compiler.Compile("test", source)
-	if err != nil {
-		if strings.Contains(err.Error(), expectedErrorSubstring) {
-			return
-		}
-		t.Fatalf("Unexpected compilation error: %v", err)
-	}
-
 	evaluator := vm.NewVM()
-	_, err = evaluator.Run(compiledProgram)
+	_, err := evaluate(evaluator, source)
 	if err != nil {
 		if strings.Contains(err.Error(), expectedErrorSubstring) {
 			return
 		}
-		t.Errorf("Expected runtime error containing '%s', got: %v", expectedErrorSubstring, err)
+		t.Errorf("Expected error containing '%s', got: %v", expectedErrorSubstring, err)
 		return
 	}
 
@@ -688,22 +703,6 @@ func TestVMEdgeCases(t *testing.T) {
 	}
 }
 
-func TestEdgeCaseErrors(t *testing.T) {
-	tests := []struct {
-		name        string
-		source      string
-		expectedErr string
-	}{
-		{"empty_program", "", "unexpected token: expected expression, got TokenEOF"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			expectError(t, tt.source, tt.expectedErr)
-		})
-	}
-}
-
 func TestStackOverflowPrevention(t *testing.T) {
 	t.Run("deep_recursion", func(t *testing.T) {
 		// This should cause a stack overflow and be caught
@@ -806,9 +805,8 @@ func TestErrorRecovery(t *testing.T) {
 
 		// First, cause an error
 		program1 := "a" // References an undefined atom.
-		compiled1, _ := compiler.Compile("test", program1)
 
-		_, err := evaluator.Run(compiled1)
+		_, err := evaluate(evaluator, program1)
 		if err == nil {
 			t.Error("Expected division by zero error")
 		}
@@ -823,9 +821,8 @@ func TestErrorRecovery(t *testing.T) {
 
 		// Should be able to run another program successfully
 		program2 := "(+ 2 3)"
-		compiled2, _ := compiler.Compile("test", program2)
 
-		result, err := evaluator.Run(compiled2)
+		result, err := evaluate(evaluator, program2)
 		if err != nil {
 			t.Errorf("Unexpected error on second program: %v", err)
 		}
