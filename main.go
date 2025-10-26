@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,9 @@ import (
 	"tomaskala.com/glisp/internal/tokenizer"
 	"tomaskala.com/glisp/internal/vm"
 )
+
+//go:embed stdlib.ss
+var stdlib string
 
 const (
 	exitSuccess      = 0
@@ -176,6 +180,11 @@ func run() int {
 	args := flag.Args()
 	var status int
 	evaluator := vm.NewVM()
+
+	_, err := evaluate(evaluator, "stdlib", stdlib, os.Stdout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading the standard library: %v", err)
+	}
 
 	if len(args) == 0 {
 		status = runRepl(evaluator)
