@@ -267,6 +267,8 @@ func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPo
 		c.compileSet(pair.Cdr)
 	case runtime.MakeAtom("begin"):
 		c.compileBegin(pair.Cdr, tailPosition)
+	case runtime.MakeAtom("apply"):
+		c.compileApply(pair.Cdr, tailPosition)
 	default:
 		// Macro expansion.
 		if m := c.getMacro(pair.Car); m != nil {
@@ -529,4 +531,39 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 	}
 
 	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
+}
+
+// Apply:
+//
+// "(" "apply" expr expr* pair ")"
+func (c *Compiler) compileApply(expr runtime.Value, tailPosition bool) {
+	if !expr.IsPair() {
+		panic(c.errorf("apply expects arguments"))
+	}
+	pair := expr.AsPair()
+
+	c.compileExpr(pair.Car, runtime.EmptyAtom, false)
+	args := pair.Cdr
+	argCount := 0
+
+	for !args.IsNil() {
+		if !args.IsPair() {
+			panic(c.errorf("apply expects a proper list"))
+		}
+		arg := args.AsPair()
+
+		c.compileExpr(arg.Car, runtime.EmptyAtom, false)
+		args = arg.Cdr
+		argCount++
+	}
+
+	if argCount == 0 {
+		panic(c.errorf("apply expects at least 2 arguments"))
+	}
+
+	if tailPosition {
+		c.emitArg(runtime.OpTailApply, argCount)
+	} else {
+		c.emitArg(runtime.OpApply, argCount)
+	}
 }

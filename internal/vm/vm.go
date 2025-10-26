@@ -264,6 +264,28 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			if err := vm.tailCallValue(callee, argCount); err != nil {
 				return runtime.Nil, err
 			}
+		case runtime.OpApply:
+			argCount := int(readOpCode(frame))
+			listLen, err := vm.unpackList()
+			if err != nil {
+				return runtime.Nil, err
+			}
+			totalArgCount := argCount - 1 + listLen
+			callee := vm.peek(totalArgCount)
+			if err := vm.callValue(callee, totalArgCount); err != nil {
+				return runtime.Nil, err
+			}
+		case runtime.OpTailApply:
+			argCount := int(readOpCode(frame))
+			listLen, err := vm.unpackList()
+			if err != nil {
+				return runtime.Nil, err
+			}
+			totalArgCount := argCount - 1 + listLen
+			callee := vm.peek(totalArgCount)
+			if err := vm.tailCallValue(callee, totalArgCount); err != nil {
+				return runtime.Nil, err
+			}
 		case runtime.OpReturn:
 			result := vm.pop()
 			vm.closeUpvalues(frame.base)
@@ -347,4 +369,19 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			return runtime.Nil, vm.runtimeError("unknown opcode: %v", opcode)
 		}
 	}
+}
+
+func (vm *VM) unpackList() (int, error) {
+	argList := vm.pop()
+	listLen := 0
+	for argList.IsPair() {
+		pair := argList.AsPair()
+		vm.push(pair.Car)
+		listLen++
+		argList = pair.Cdr
+	}
+	if !argList.IsNil() {
+		return 0, vm.runtimeError("apply expects a proper list")
+	}
+	return listLen, nil
 }

@@ -53,6 +53,12 @@ func (d *Disassembler) disassemble(prefix string) {
 		case runtime.OpTailCall:
 			argCount := int(d.readOpCode())
 			d.writeOpf("TailCall/%d", argCount)
+		case runtime.OpApply:
+			argCount := int(d.readOpCode())
+			d.writeOpf("Apply/%d", argCount)
+		case runtime.OpTailApply:
+			argCount := int(d.readOpCode())
+			d.writeOpf("TailApply/%d", argCount)
 		case runtime.OpReturn:
 			d.writeOpf("Return")
 		case runtime.OpGetLocal:

@@ -30,6 +30,8 @@ const (
 	OpNil
 	OpCall
 	OpTailCall
+	OpApply
+	OpTailApply
 	OpReturn
 	OpGetLocal
 	OpSetLocal
