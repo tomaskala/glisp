@@ -244,6 +244,14 @@ func readAtom(t *Tokenizer) stateFn {
 			break
 		}
 	}
+	val := t.source[t.start:t.pos]
+	if strings.EqualFold(val, "NaN") ||
+		strings.EqualFold(val, "Inf") ||
+		strings.EqualFold(val, "-Inf") ||
+		strings.EqualFold(val, "Infinity") ||
+		strings.EqualFold(val, "-Infinity") {
+		return t.emit(TokenNumber)
+	}
 	return t.emit(TokenAtom)
 }
 

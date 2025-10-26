@@ -140,6 +140,23 @@ var numberFormatTests = map[string]struct {
 		tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "999999999999999999"},
 	},
 	"tiny float": {"0.000000001", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "0.000000001"}},
+
+	// Reserved values
+	"nan1":       {"NaN", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "NaN"}},
+	"nan2":       {"nan", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "nan"}},
+	"nan3":       {"NAN", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "NAN"}},
+	"inf1":       {"inf", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "inf"}},
+	"inf2":       {"INF", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "INF"}},
+	"inf3":       {"iNf", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "iNf"}},
+	"infinity1":  {"infinity", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "infinity"}},
+	"infinity2":  {"INFINITY", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "INFINITY"}},
+	"infinity3":  {"iNfInItY", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "iNfInItY"}},
+	"-inf1":      {"-inf", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-inf"}},
+	"-inf2":      {"-INF", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-INF"}},
+	"-inf3":      {"-iNf", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-iNf"}},
+	"-infinity1": {"-infinity", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-infinity"}},
+	"-infinity2": {"-INFINITY", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-INFINITY"}},
+	"-infinity3": {"-iNfInItY", tokenizer.Token{Type: tokenizer.TokenNumber, Line: 1, Val: "-iNfInItY"}},
 }
 
 // Atom edge case tests.
