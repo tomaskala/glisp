@@ -31,6 +31,7 @@ var (
 	disassemble = flag.Bool("disassemble", false, "disassemble each expression")
 	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile  = flag.String("memprofile", "", "write memory profile to `file`")
+	repl        = flag.Bool("repl", false, "open a REPL after loading a file")
 )
 
 func balancedParentheses(lines []string) bool {
@@ -85,7 +86,7 @@ func evaluate(evaluator *vm.VM, name, source string, out io.Writer) (glispruntim
 	return result, nil
 }
 
-func runRepl() int {
+func runRepl(evaluator *vm.VM) int {
 	completer := readline.NewPrefixCompleter()
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       prompt,
@@ -97,7 +98,6 @@ func runRepl() int {
 	}
 	defer rl.Close()
 
-	evaluator := vm.NewVM()
 	var lines []string
 	reset := func() {
 		lines = lines[:0]
@@ -142,14 +142,13 @@ func runRepl() int {
 	return exitSuccess
 }
 
-func runScript(path string) int {
+func runScript(evaluator *vm.VM, path string) int {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening %s: %v", path, err)
 		return exitIoError
 	}
 
-	evaluator := vm.NewVM()
 	_, err = evaluate(evaluator, path, string(source), os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -176,10 +175,15 @@ func run() int {
 
 	args := flag.Args()
 	var status int
+	evaluator := vm.NewVM()
+
 	if len(args) == 0 {
-		status = runRepl()
+		status = runRepl(evaluator)
 	} else {
-		status = runScript(args[0])
+		status = runScript(evaluator, args[0])
+		if *repl {
+			status = runRepl(evaluator)
+		}
 	}
 
 	if *memprofile != "" {
