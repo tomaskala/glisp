@@ -7,13 +7,11 @@ import (
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/runtime"
-	"tomaskala.com/glisp/internal/tokenizer"
 	"tomaskala.com/glisp/internal/vm"
 )
 
 func evaluate(evaluator *vm.VM, source string) (runtime.Value, error) {
-	t := tokenizer.NewTokenizer(source)
-	p := parser.NewParser("test", t)
+	p := parser.NewParser("test", source)
 	c := compiler.NewCompiler("test", evaluator)
 	result := runtime.MakeNil()
 

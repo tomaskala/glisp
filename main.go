@@ -16,7 +16,6 @@ import (
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/parser"
 	glispruntime "tomaskala.com/glisp/internal/runtime"
-	"tomaskala.com/glisp/internal/tokenizer"
 	"tomaskala.com/glisp/internal/vm"
 )
 
@@ -61,8 +60,7 @@ func balancedParentheses(lines []string) bool {
 }
 
 func evaluate(evaluator *vm.VM, name, source string, out io.Writer) (glispruntime.Value, error) {
-	t := tokenizer.NewTokenizer(source)
-	p := parser.NewParser(name, t)
+	p := parser.NewParser(name, source)
 	c := compiler.NewCompiler(name, evaluator)
 	result := glispruntime.MakeNil()
 
@@ -91,11 +89,7 @@ func evaluate(evaluator *vm.VM, name, source string, out io.Writer) (glispruntim
 }
 
 func runRepl(evaluator *vm.VM) int {
-	completer := readline.NewPrefixCompleter()
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:       prompt,
-		AutoComplete: completer,
-	})
+	rl, err := readline.New(prompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening REPL: %v", err)
 		return exitIoError

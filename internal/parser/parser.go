@@ -24,8 +24,8 @@ type Parser struct {
 	tokenizer *tokenizer.Tokenizer // The underlying tokenizer.
 }
 
-func NewParser(name string, tokenizer *tokenizer.Tokenizer) *Parser {
-	p := &Parser{name: name, tokenizer: tokenizer}
+func NewParser(name, source string) *Parser {
+	p := &Parser{name: name, tokenizer: tokenizer.NewTokenizer(source)}
 	p.advance() // Initialize the first token.
 	return p
 }
