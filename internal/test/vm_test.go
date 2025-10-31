@@ -1,6 +1,7 @@
 package test
 
 import (
+	_ "embed"
 	"strings"
 	"testing"
 
@@ -39,6 +40,11 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 	t.Helper()
 
 	evaluator := vm.NewVM()
+	_, err := evaluate(evaluator, runtime.Stdlib)
+	if err != nil {
+		t.Fatalf("loading stdlib failed: %v", err)
+	}
+
 	result, err := evaluate(evaluator, source)
 	if err != nil {
 		t.Fatalf("VM execution failed: %v", err)
@@ -62,7 +68,12 @@ func expectError(t *testing.T, source string, expectedErrorSubstring string) {
 	t.Helper()
 
 	evaluator := vm.NewVM()
-	_, err := evaluate(evaluator, source)
+	_, err := evaluate(evaluator, runtime.Stdlib)
+	if err != nil {
+		t.Fatalf("loading stdlib failed: %v", err)
+	}
+
+	_, err = evaluate(evaluator, source)
 	if err != nil {
 		if strings.Contains(err.Error(), expectedErrorSubstring) {
 			return
@@ -800,11 +811,15 @@ func TestErrorRecovery(t *testing.T) {
 	// Test that VM properly resets state after errors
 	t.Run("error_recovery", func(t *testing.T) {
 		evaluator := vm.NewVM()
+		_, err := evaluate(evaluator, runtime.Stdlib)
+		if err != nil {
+			t.Fatalf("loading stdlib failed: %v", err)
+		}
 
 		// First, cause an error
 		program1 := "a" // References an undefined atom.
 
-		_, err := evaluate(evaluator, program1)
+		_, err = evaluate(evaluator, program1)
 		if err == nil {
 			t.Error("Expected division by zero error")
 		}

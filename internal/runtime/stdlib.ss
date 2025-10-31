@@ -1,6 +1,28 @@
 ;; list returns the arguments as they are in a list.
+;; Required for backquoting.
 (define list
   (lambda args args))
+
+;; append1 concatenates two lists together.
+;;
+;; time: O(len(s))
+;; space: O(len(s))
+;; tail-recursive: no
+(define append1
+  (lambda (s t)
+    (if (nil? s) t
+      (cons (car s) (append1 (cdr s) t)))))
+
+;; append concatenates an arbitrary number of lists together.
+;; Required for backquoting.
+;;
+;; time: O(n)
+;; space: O(n)
+;; tail-recursive: no
+(define append
+  (lambda (lst . args)
+    (if (nil? args) lst
+      (append1 lst (apply append args)))))
 
 ;; defmacro is a shorthand for (define <name> (macro <params> <body>)).
 (define defmacro
@@ -9,6 +31,55 @@
 ;; defun is a shorthand for (define <name> (lambda <params> <body>)).
 (defmacro defun (f v x)
   `(define ,f (lambda ,v ,x)))
+
+;; The following let expression:
+;;
+;;	(let ((k1 v1) (k2 v2) ... (kN vN)) body)
+;;
+;; is equivalent to the following lambda invocation:
+;;
+;;	((lambda (k1 k2 ... kN) body) v1 v2 ... vN)
+(defmacro let (bindings body)
+  (if (nil? bindings)
+    `((lambda () ,body))
+    `((lambda ,(map car bindings) ,body) 
+      ,@(map (lambda (b) (car (cdr b))) bindings))))
+
+;; The following let* expression:
+;;
+;;	(let* ((k1 v1) (k2 v2) ... (kN vN)) body)
+;;
+;; is equivalent to the following lambda invocation:
+;;
+;;	((lambda (k1) ((lambda (k2) ... ((lambda (kN) body) vN) ... v2) v1))
+(defmacro let* (bindings body)
+  (if (nil? bindings)
+    body
+    `((lambda (,(car (car bindings))) 
+        (let* ,(cdr bindings) ,body))
+      ,(car (cdr (car bindings))))))
+
+;; The following letrec expression:
+;;
+;;	(letrec ((k1 v1) (k2 v2) ... (kN vN)) body)
+;;
+;; is equivalent to the following lambda invocation:
+;;
+;;	((lambda (k1 k2 ... kN)
+;;	  (begin
+;;	    (set! k1 v1)
+;;	    (set! k2 v2)
+;;	    ...
+;;	    (set! kN vN)
+;;	    body)) () () ... ())
+(defmacro letrec (bindings body)
+  (if (nil? bindings)
+    `((lambda () ,body))
+    `((lambda ,(map car bindings)
+        (begin
+          ,@(map (lambda (b) `(set! ,(car b) ,(car (cdr b)))) bindings)
+          ,body))
+      ,@(map (lambda (x) '()) bindings))))
 
 ;; id is an identity function
 ;;

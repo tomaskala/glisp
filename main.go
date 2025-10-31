@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,9 +17,6 @@ import (
 	glispruntime "tomaskala.com/glisp/internal/runtime"
 	"tomaskala.com/glisp/internal/vm"
 )
-
-//go:embed stdlib.ss
-var stdlib string
 
 const (
 	exitSuccess      = 0
@@ -175,7 +171,7 @@ func run() int {
 	var status int
 	evaluator := vm.NewVM()
 
-	_, err := evaluate(evaluator, "stdlib", stdlib, os.Stdout)
+	_, err := evaluate(evaluator, "stdlib", glispruntime.Stdlib, os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading the standard library: %v", err)
 	}
