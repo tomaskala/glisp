@@ -127,7 +127,7 @@ func (p *Parser) parseNumber() float64 {
 func (p *Parser) backquote() runtime.Value {
 	switch {
 	case p.match(tokenizer.TokenLeftParen):
-		return runtime.Cons(runtime.MakeAtom("list"), p.quotedList())
+		return p.quotedList()
 	case p.match(tokenizer.TokenComma):
 		return p.expression()
 	default:
@@ -141,7 +141,19 @@ func (p *Parser) quotedList() runtime.Value {
 	case p.match(tokenizer.TokenRightParen):
 		return runtime.MakeNil()
 	default:
+		return runtime.Cons(runtime.MakeAtom("append"), p.quotedListElements())
+	}
+}
+
+func (p *Parser) quotedListElements() runtime.Value {
+	switch {
+	case p.match(tokenizer.TokenRightParen):
+		return runtime.MakeNil()
+	case p.match(tokenizer.TokenCommaAt):
+		return runtime.Cons(p.expression(), p.quotedListElements())
+	default:
 		elem := p.backquote()
-		return runtime.Cons(elem, p.quotedList())
+		list := runtime.Cons(runtime.MakeAtom("list"), runtime.Cons(elem, runtime.MakeNil()))
+		return runtime.Cons(list, p.quotedListElements())
 	}
 }

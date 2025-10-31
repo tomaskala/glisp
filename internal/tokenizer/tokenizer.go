@@ -26,6 +26,7 @@ const (
 	TokenQuote
 	TokenBackquote
 	TokenComma
+	TokenCommaAt
 	TokenNumber
 	TokenAtom
 )
@@ -34,7 +35,7 @@ const (
 	// eof denotes that we have reached the end of the input.
 	eof = -1
 	// forbiddenInAtom is a list of runes forbidden from appearing in an atom.
-	forbiddenInAtom = "().';`,"
+	forbiddenInAtom = "().';`,@"
 )
 
 type stateFn func(*Tokenizer) stateFn
@@ -152,6 +153,9 @@ func readExpr(t *Tokenizer) stateFn {
 	case r == '`':
 		return t.emit(TokenBackquote)
 	case r == ',':
+		if t.accept("@") {
+			return t.emit(TokenCommaAt)
+		}
 		return t.emit(TokenComma)
 	case r == ';':
 		return readComment(t)

@@ -36,6 +36,7 @@ var basicTokenTests = map[string]struct {
 	"quote":     {"'", tokenizer.Token{Type: tokenizer.TokenQuote, Line: 1, Val: "'"}},
 	"backquote": {"`", tokenizer.Token{Type: tokenizer.TokenBackquote, Line: 1, Val: "`"}},
 	"comma":     {",", tokenizer.Token{Type: tokenizer.TokenComma, Line: 1, Val: ","}},
+	"comma-at":  {",@", tokenizer.Token{Type: tokenizer.TokenCommaAt, Line: 1, Val: ",@"}},
 
 	// Basic atoms
 	"simple atom":        {"hello", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "hello"}},
@@ -165,7 +166,6 @@ var atomEdgeCaseTests = map[string]struct {
 	token  tokenizer.Token
 }{
 	// Special characters in atoms
-	"at symbol":    {"@", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "@"}},
 	"hash":         {"#", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "#"}},
 	"percent":      {"%", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "%"}},
 	"caret":        {"^", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "^"}},
@@ -183,8 +183,8 @@ var atomEdgeCaseTests = map[string]struct {
 
 	// Complex atoms
 	"mixed special": {
-		"hello-world@test",
-		tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "hello-world@test"},
+		"hello-world#test",
+		tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "hello-world#test"},
 	},
 	"operator like":   {"<=", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: "<="}},
 	"operator like 2": {">=", tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: ">="}},
@@ -210,11 +210,11 @@ var atomEdgeCaseTests = map[string]struct {
 		tokenizer.Token{Type: tokenizer.TokenAtom, Line: 1, Val: strings.Repeat("a", 100)},
 	},
 	"long mixed": {
-		"very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols",
+		"very-long-atom-with-many-dashes-and-123-numbers-and-#-symbols",
 		tokenizer.Token{
 			Type: tokenizer.TokenAtom,
 			Line: 1,
-			Val:  "very-long-atom-with-many-dashes-and-123-numbers-and-@-symbols",
+			Val:  "very-long-atom-with-many-dashes-and-123-numbers-and-#-symbols",
 		},
 	},
 }
@@ -299,6 +299,24 @@ var sequenceTests = map[string]struct {
 			{Type: tokenizer.TokenAtom, Line: 1, Val: "e"},
 			{Type: tokenizer.TokenAtom, Line: 1, Val: "f"},
 			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
+			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
+			{Type: tokenizer.TokenEOF, Line: 1, Val: "EOF"},
+		},
+	},
+	"comma-at expression": {
+		source: "`(a ,@(list 1 2 3) b)",
+		tokens: []tokenizer.Token{
+			{Type: tokenizer.TokenBackquote, Line: 1, Val: "`"},
+			{Type: tokenizer.TokenLeftParen, Line: 1, Val: "("},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "a"},
+			{Type: tokenizer.TokenCommaAt, Line: 1, Val: ",@"},
+			{Type: tokenizer.TokenLeftParen, Line: 1, Val: "("},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "list"},
+			{Type: tokenizer.TokenNumber, Line: 1, Val: "1"},
+			{Type: tokenizer.TokenNumber, Line: 1, Val: "2"},
+			{Type: tokenizer.TokenNumber, Line: 1, Val: "3"},
+			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
+			{Type: tokenizer.TokenAtom, Line: 1, Val: "b"},
 			{Type: tokenizer.TokenRightParen, Line: 1, Val: ")"},
 			{Type: tokenizer.TokenEOF, Line: 1, Val: "EOF"},
 		},
