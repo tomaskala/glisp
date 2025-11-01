@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"tomaskala.com/glisp/internal/runtime"
-	"tomaskala.com/glisp/internal/vm"
 )
 
 type CompileError struct {
@@ -17,22 +16,28 @@ func (e *CompileError) Error() string {
 	return fmt.Sprintf("compile error at %d: %s", e.Line, e.Message)
 }
 
+type MacroRegistry interface {
+	GetMacro(runtime.Atom) (runtime.Macro, bool)
+	StoreMacro(runtime.Atom, runtime.Macro)
+	ExpandMacro(runtime.Macro, runtime.Value) (runtime.Value, error)
+}
+
 type Compiler struct {
 	parent   *Compiler         // The enclosing compiler, if any.
 	function *runtime.Function // The function currently being compiled.
 	locals   []runtime.Atom    // Local variables of the function.
-	vm       *vm.VM            // The evaluator used for macro expansion.
+	macros   MacroRegistry     // Stores and expands macros.
 }
 
-func NewCompiler(name string, vm *vm.VM) *Compiler {
-	return newCompiler(nil, runtime.NewAtom(name), vm)
+func NewCompiler(name string, macros MacroRegistry) *Compiler {
+	return newCompiler(nil, runtime.NewAtom(name), macros)
 }
 
-func newCompiler(parent *Compiler, name runtime.Atom, vm *vm.VM) *Compiler {
+func newCompiler(parent *Compiler, name runtime.Atom, macros MacroRegistry) *Compiler {
 	return &Compiler{
 		parent:   parent,
 		function: &runtime.Function{Name: name},
-		vm:       vm,
+		macros:   macros,
 	}
 }
 
@@ -271,10 +276,15 @@ func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPo
 		c.compileApply(pair.Cdr, tailPosition)
 	default:
 		// Macro expansion.
-		if m := c.getMacro(pair.Car); m != nil {
-			expanded := c.expandMacro(m, pair.Cdr)
-			c.compileExpr(expanded, nameHint, tailPosition)
-			return
+		if pair.Car.IsAtom() {
+			if m, ok := c.macros.GetMacro(pair.Car.AsAtom()); ok {
+				expanded, err := c.macros.ExpandMacro(m, pair.Cdr)
+				if err != nil {
+					panic(c.errorf("%s", err.Error()))
+				}
+				c.compileExpr(expanded, nameHint, tailPosition)
+				return
+			}
 		}
 
 		// Function call.
@@ -336,7 +346,7 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 // "(" "lambda" (atom | "(" expr* ")" | "(" expr+ "." expr ")") expr ")".
 func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	params, body := c.extract2(expr, "lambda")
-	compiler := newCompiler(c, nameHint, c.vm)
+	compiler := newCompiler(c, nameHint, c.macros)
 
 	for params.IsPair() {
 		param := params.AsPair()
@@ -362,6 +372,35 @@ func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	function := compiler.end()
 	idx := c.addConstant(runtime.MakeFunction(function))
 	c.emitArg(runtime.OpClosure, idx)
+}
+
+// Macro:
+//
+// "(" "macro" (atom | "(" expr* ")" | "(" expr+ "." expr ")") expr ")".
+func (c *Compiler) compileMacro(expr runtime.Value, nameHint runtime.Atom) {
+	params, body := c.extract2(expr, "macro")
+	macro := runtime.NewMacro(nameHint, body)
+
+	for params.IsPair() {
+		param := params.AsPair()
+		if !param.Car.IsAtom() {
+			panic(c.errorf("macro parameter expects atom"))
+		}
+		atom := param.Car.AsAtom()
+
+		macro.Params = append(macro.Params, atom)
+		params = param.Cdr
+	}
+
+	if params.IsAtom() {
+		atom := params.AsAtom()
+		macro.RestParam = atom
+	} else if !params.IsNil() {
+		panic(c.errorf("macro parameter expects atom"))
+	}
+
+	c.macros.StoreMacro(nameHint, macro)
+	c.emit(runtime.OpNil)
 }
 
 // If:
@@ -535,7 +574,7 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 
 // Apply:
 //
-// "(" "apply" expr expr* pair ")"
+// "(" "apply" expr expr* pair ")".
 func (c *Compiler) compileApply(expr runtime.Value, tailPosition bool) {
 	if !expr.IsPair() {
 		panic(c.errorf("apply expects arguments"))

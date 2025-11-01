@@ -38,12 +38,13 @@ type VM struct {
 	OpenUpvalues []*runtime.Upvalue
 
 	globals map[runtime.Atom]runtime.Value
+	macros  map[runtime.Atom]runtime.Macro
 }
 
 func NewVM() *VM {
 	stack := make([]runtime.Value, 0, stackInit)
 	globals := runtime.LoadBuiltins()
-	return &VM{Stack: stack, globals: globals}
+	return &VM{Stack: stack, globals: globals, macros: make(map[runtime.Atom]runtime.Macro)}
 }
 
 func (vm *VM) push(v runtime.Value) {

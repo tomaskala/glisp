@@ -20,6 +20,17 @@ const (
 	typeBuiltin
 )
 
+type Macro struct {
+	Name      Atom
+	Params    []Atom
+	RestParam Atom
+	Body      Value
+}
+
+func NewMacro(name Atom, body Value) Macro {
+	return Macro{Name: name, RestParam: EmptyAtom, Body: body}
+}
+
 type Program struct {
 	Function *Function
 }
