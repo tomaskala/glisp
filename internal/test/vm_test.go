@@ -6,13 +6,12 @@ import (
 	"testing"
 
 	"tomaskala.com/glisp/internal/compiler"
-	"tomaskala.com/glisp/internal/parser"
 	"tomaskala.com/glisp/internal/runtime"
 	"tomaskala.com/glisp/internal/vm"
 )
 
 func evaluate(evaluator *vm.VM, source string) (runtime.Value, error) {
-	p := parser.NewParser("test", source)
+	p := compiler.NewParser("test", source)
 	c := compiler.NewCompiler("test", evaluator)
 	result := runtime.MakeNil()
 
