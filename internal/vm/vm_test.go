@@ -1,4 +1,4 @@
-package test
+package vm
 
 import (
 	_ "embed"
@@ -7,10 +7,9 @@ import (
 
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/runtime"
-	"tomaskala.com/glisp/internal/vm"
 )
 
-func evaluate(evaluator *vm.VM, source string) (runtime.Value, error) {
+func evaluate(evaluator *VM, source string) (runtime.Value, error) {
 	p := compiler.NewParser("test", source)
 	c := compiler.NewCompiler("test", evaluator)
 	result := runtime.MakeNil()
@@ -38,7 +37,7 @@ func evaluate(evaluator *vm.VM, source string) (runtime.Value, error) {
 func evalExpr(t *testing.T, source string) runtime.Value {
 	t.Helper()
 
-	evaluator := vm.NewVM()
+	evaluator := NewVM()
 	_, err := evaluate(evaluator, runtime.Stdlib)
 	if err != nil {
 		t.Fatalf("loading stdlib failed: %v", err)
@@ -66,7 +65,7 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 func expectError(t *testing.T, source string, expectedErrorSubstring string) {
 	t.Helper()
 
-	evaluator := vm.NewVM()
+	evaluator := NewVM()
 	_, err := evaluate(evaluator, runtime.Stdlib)
 	if err != nil {
 		t.Fatalf("loading stdlib failed: %v", err)
@@ -809,7 +808,7 @@ func TestMemoryAndGarbageCollection(t *testing.T) {
 func TestErrorRecovery(t *testing.T) {
 	// Test that VM properly resets state after errors
 	t.Run("error_recovery", func(t *testing.T) {
-		evaluator := vm.NewVM()
+		evaluator := NewVM()
 		_, err := evaluate(evaluator, runtime.Stdlib)
 		if err != nil {
 			t.Fatalf("loading stdlib failed: %v", err)
