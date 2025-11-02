@@ -87,6 +87,13 @@
 ;; space: O(1)
 (defun id (x) x)
 
+;; not negates its argument: the empty list becomes #t, everything else becomes
+;; the empty list
+;;
+;; time: O(1)
+;; space: O(1)
+(define not nil?)
+
 ;; equal? tests whether two values are deeply equal.
 ;;
 ;; time: O(n)

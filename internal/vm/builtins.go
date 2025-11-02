@@ -403,7 +403,6 @@ func LoadBuiltins() map[runtime.Atom]runtime.Value {
 		runtime.NewAtom("eq?"):      runtime.MakeBuiltin(builtinEq),
 		runtime.NewAtom("atom?"):    runtime.MakeBuiltin(builtinIsAtom),
 		runtime.NewAtom("nil?"):     runtime.MakeBuiltin(builtinIsNil),
-		runtime.NewAtom("not"):      runtime.MakeBuiltin(builtinIsNil),
 		runtime.NewAtom("pair?"):    runtime.MakeBuiltin(builtinIsPair),
 		runtime.NewAtom("set-car!"): runtime.MakeBuiltin(builtinSetCar),
 		runtime.NewAtom("set-cdr!"): runtime.MakeBuiltin(builtinSetCdr),
