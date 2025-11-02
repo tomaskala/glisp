@@ -47,6 +47,13 @@ func NewVM() *VM {
 	return &VM{Stack: stack, globals: globals, macros: make(map[runtime.Atom]runtime.Macro)}
 }
 
+func (vm *VM) Child() runtime.Evaluator {
+	child := NewVM()
+	child.globals = vm.globals
+	child.macros = vm.macros
+	return child
+}
+
 func (vm *VM) push(v runtime.Value) {
 	stackTop := vm.StackTop
 	if stackTop >= len(vm.Stack) {
@@ -248,6 +255,7 @@ func readFunction(frame *Frame) *runtime.Function {
 	return readConstant(frame).AsFunction()
 }
 
+// Run implements the runtime.Evaluator interface.
 func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 	vm.pushFrame(&runtime.Closure{Function: program.Function}, 0)
 	for {

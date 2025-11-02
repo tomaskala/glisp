@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/runtime"
 )
 
@@ -45,6 +46,29 @@ func relNumOp(l, r runtime.Value, op func(float64, float64) bool) (runtime.Value
 		return runtime.True, true
 	}
 	return runtime.Nil, true
+}
+
+func builtinEval(vm runtime.Evaluator, n int) error {
+	if err := checkArgs(n, 1, "eval"); err != nil {
+		return err
+	}
+
+	arg := vm.Pop()
+	child := vm.Child()
+
+	c := compiler.NewCompiler("eval", child)
+	prog, err := c.Compile(arg)
+	if err != nil {
+		return err
+	}
+
+	result, err := child.Run(prog)
+	if err != nil {
+		return err
+	}
+
+	vm.SetTop(result)
+	return nil
 }
 
 func builtinCons(vm runtime.Evaluator, n int) error {
@@ -350,7 +374,11 @@ func builtinDisplay(vm runtime.Evaluator, n int) error {
 	return nil
 }
 
-func builtinNewline(vm runtime.Evaluator, _ int) error {
+func builtinNewline(vm runtime.Evaluator, n int) error {
+	if err := checkArgs(n, 0, "newline"); err != nil {
+		return err
+	}
+
 	fmt.Println()
 	vm.SetTop(runtime.MakeNil())
 	return nil
@@ -359,6 +387,7 @@ func builtinNewline(vm runtime.Evaluator, _ int) error {
 func LoadBuiltins() map[runtime.Atom]runtime.Value {
 	return map[runtime.Atom]runtime.Value{
 		runtime.NewAtom("#t"):       runtime.True,
+		runtime.NewAtom("eval"):     runtime.MakeBuiltin(builtinEval),
 		runtime.NewAtom("cons"):     runtime.MakeBuiltin(builtinCons),
 		runtime.NewAtom("car"):      runtime.MakeBuiltin(builtinCar),
 		runtime.NewAtom("cdr"):      runtime.MakeBuiltin(builtinCdr),

@@ -16,24 +16,18 @@ func (e *CompileError) Error() string {
 	return fmt.Sprintf("compile error at %d: %s", e.Line, e.Message)
 }
 
-type MacroRegistry interface {
-	GetMacro(runtime.Atom) (runtime.Macro, bool)
-	StoreMacro(runtime.Atom, runtime.Macro)
-	ExpandMacro(runtime.Macro, runtime.Value) (runtime.Value, error)
-}
-
 type Compiler struct {
-	parent   *Compiler         // The enclosing compiler, if any.
-	function *runtime.Function // The function currently being compiled.
-	locals   []runtime.Atom    // Local variables of the function.
-	macros   MacroRegistry     // Stores and expands macros.
+	parent   *Compiler             // The enclosing compiler, if any.
+	function *runtime.Function     // The function currently being compiled.
+	locals   []runtime.Atom        // Local variables of the function.
+	macros   runtime.MacroRegistry // Stores and expands macros.
 }
 
-func NewCompiler(name string, macros MacroRegistry) *Compiler {
+func NewCompiler(name string, macros runtime.MacroRegistry) *Compiler {
 	return newCompiler(nil, runtime.NewAtom(name), macros)
 }
 
-func newCompiler(parent *Compiler, name runtime.Atom, macros MacroRegistry) *Compiler {
+func newCompiler(parent *Compiler, name runtime.Atom, macros runtime.MacroRegistry) *Compiler {
 	return &Compiler{
 		parent:   parent,
 		function: &runtime.Function{Name: name},

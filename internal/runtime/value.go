@@ -7,7 +7,16 @@ import (
 	"unsafe"
 )
 
+type MacroRegistry interface {
+	GetMacro(Atom) (Macro, bool)
+	StoreMacro(Atom, Macro)
+	ExpandMacro(Macro, Value) (Value, error)
+}
+
 type Evaluator interface {
+	MacroRegistry
+	Run(*Program) (Value, error)
+	Child() Evaluator
 	SetTop(Value)
 	Pop() Value
 	PopSlice(int) []Value
