@@ -7,6 +7,12 @@ import (
 	"unsafe"
 )
 
+type Evaluator interface {
+	SetTop(Value)
+	Pop() Value
+	PopSlice(int) []Value
+}
+
 type valueType int
 
 const (
@@ -78,8 +84,8 @@ func MakeClosure(c *Closure) Value {
 	return Value{typ: typeClosure, ptr: unsafe.Pointer(c)}
 }
 
-func MakeBuiltin(b *Builtin) Value {
-	return Value{typ: typeBuiltin, ptr: unsafe.Pointer(b)}
+func MakeBuiltin(b Builtin) Value {
+	return Value{typ: typeBuiltin, ptr: unsafe.Pointer(&b)}
 }
 
 // Type checks
@@ -117,8 +123,8 @@ func (v Value) AsClosure() *Closure {
 	return (*Closure)(v.ptr)
 }
 
-func (v Value) AsBuiltin() *Builtin {
-	return (*Builtin)(v.ptr)
+func (v Value) AsBuiltin() Builtin {
+	return *(*Builtin)(v.ptr)
 }
 
 var (
@@ -164,11 +170,7 @@ type Closure struct {
 	Upvalues []*Upvalue
 }
 
-type Builtin struct {
-	Name     Atom
-	Arity    int
-	Function func([]Value) (Value, error)
-}
+type Builtin func(Evaluator, int) error
 
 func (v Value) String() string {
 	switch v.typ {
@@ -187,8 +189,7 @@ func (v Value) String() string {
 		}
 		return fmt.Sprintf("<closure %s>", c.Function.Name.Value())
 	case typeBuiltin:
-		b := (*Builtin)(v.ptr)
-		return fmt.Sprintf("<builtin %s>", b.Name.Value())
+		return "<builtin>"
 	default:
 		return "<unknown>"
 	}

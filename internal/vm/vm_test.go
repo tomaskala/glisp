@@ -113,12 +113,14 @@ func TestArithmetic(t *testing.T) {
 		source   string
 		expected string
 	}{
+		{"add_empty", "(+)", "0"},
 		{"add_basic", "(+ 2 3)", "5"},
 		{"add_multiple", "(+ 1 2 3 4)", "10"},
 		{"add_single", "(+ 5)", "5"},
 		{"sub_basic", "(- 10 3)", "7"},
 		{"sub_multiple", "(- 20 5 3)", "12"},
 		{"sub_negate", "(- 5)", "-5"},
+		{"mul_empty", "(*)", "1"},
 		{"mul_basic", "(* 4 5)", "20"},
 		{"mul_multiple", "(* 2 3 4)", "24"},
 		{"mul_single", "(* 7)", "7"},
@@ -145,9 +147,7 @@ func TestArithmeticErrors(t *testing.T) {
 		source      string
 		expectedErr string
 	}{
-		{"add_no_args", "(+)", "+ expects at least 1 argument"},
 		{"sub_no_args", "(-)", "- expects at least 1 argument"},
-		{"mul_no_args", "(*)", "* expects at least 1 argument"},
 		{"div_no_args", "(/)", "/ expects at least 1 argument"},
 		{"add_non_number", "(+ 5 'hello)", "+ is only defined for numbers"},
 		{"sub_non_number", "(- 10 'world)", "- is only defined for numbers"},

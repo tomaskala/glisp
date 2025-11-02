@@ -200,7 +200,6 @@ func (c *Compiler) extract3(expr runtime.Value, name string) (runtime.Value, run
 	return val1, val2, val3
 }
 
-// TODO: (+) should return 0 and (*) should return 1 (no change for (-) and (/))
 func (c *Compiler) Compile(expr runtime.Value) (prog *runtime.Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
