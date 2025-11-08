@@ -144,10 +144,10 @@ func (vm *VM) closeUpvalues(last int) {
 
 func (vm *VM) checkArgs(closure *runtime.Closure, argCount int) error {
 	function := closure.Function
-	if !function.HasRestParam && argCount != function.Arity {
+	if !function.IsVariadic && argCount != function.Arity {
 		return vm.runtimeError("%s expects %d arguments, got %d", function.Name.Value(), function.Arity, argCount)
 	}
-	if function.HasRestParam && argCount < function.Arity {
+	if function.IsVariadic && argCount < function.Arity {
 		return vm.runtimeError(
 			"%s expects at least %d arguments, got %d",
 			function.Name.Value(),
@@ -175,7 +175,7 @@ func (vm *VM) callValue(callee runtime.Value, argCount int) error {
 func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 	function := closure.Function
 	base := vm.stackTop - argCount
-	if function.HasRestParam {
+	if function.IsVariadic {
 		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
 			arg := vm.stack[base+i]
@@ -206,7 +206,7 @@ func (vm *VM) tailCallClosure(closure *runtime.Closure, argCount int) {
 	function := closure.Function
 	currentFrame := vm.peekFrame()
 	newArgCount := argCount
-	if function.HasRestParam {
+	if function.IsVariadic {
 		base := vm.stackTop - argCount
 		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {

@@ -356,7 +356,7 @@ func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	if params.IsAtom() {
 		atom := params.AsAtom()
 		compiler.addLocal(atom)
-		compiler.function.HasRestParam = true
+		compiler.function.IsVariadic = true
 	} else if !params.IsNil() {
 		panic(compiler.errorf("function parameter expects atom"))
 	}

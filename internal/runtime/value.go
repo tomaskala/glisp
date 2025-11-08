@@ -153,11 +153,11 @@ type Upvalue struct {
 }
 
 type Function struct {
-	Name         Atom
-	Arity        int
-	HasRestParam bool
-	Chunk        Chunk
-	Upvalues     []UpvalueSpec
+	Name       Atom
+	Arity      int
+	IsVariadic bool
+	Chunk      Chunk
+	Upvalues   []UpvalueSpec
 }
 
 type UpvalueSpec struct {
