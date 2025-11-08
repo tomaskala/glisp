@@ -47,6 +47,17 @@ func relNumOp(l, r runtime.Value, op func(float64, float64) bool) (runtime.Value
 	return runtime.Nil, true
 }
 
+func builtinGensym(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 0, "newline"); err != nil {
+		return err
+	}
+
+	sym := runtime.MakeAtom(fmt.Sprintf("#:G%d", vm.gensymCounter))
+	vm.gensymCounter++
+	vm.setTop(sym)
+	return nil
+}
+
 func builtinEval(vm *VM, n int) error {
 	if err := checkArgs(vm, n, 1, "eval"); err != nil {
 		return err
@@ -391,6 +402,7 @@ var (
 
 func init() {
 	builtinsNames = []runtime.Atom{
+		runtime.NewAtom("gensym"),
 		runtime.NewAtom("eval"),
 		runtime.NewAtom("cons"),
 		runtime.NewAtom("car"),
@@ -415,6 +427,7 @@ func init() {
 	}
 
 	builtinsFunctions = []func(*VM, int) error{
+		builtinGensym,
 		builtinEval,
 		builtinCons,
 		builtinCar,

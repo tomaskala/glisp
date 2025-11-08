@@ -37,8 +37,9 @@ type VM struct {
 
 	openUpvalues []*runtime.Upvalue
 
-	globals map[runtime.Atom]runtime.Value
-	macros  map[runtime.Atom]runtime.Macro
+	globals       map[runtime.Atom]runtime.Value
+	macros        map[runtime.Atom]runtime.Macro
+	gensymCounter int
 }
 
 func newStack() []runtime.Value {
