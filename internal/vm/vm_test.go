@@ -876,3 +876,298 @@ func TestProgramsWithSideEffects(t *testing.T) {
 		}
 	})
 }
+
+func TestApply(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"apply_basic", "(apply + '(1 2 3))", "6"},
+		{"apply_with_args", "(apply + 1 2 '(3 4))", "10"},
+		{"apply_cons", "(apply cons '(a b))", "(a . b)"},
+		{"apply_lambda", "(apply (lambda (x y) (* x y)) '(3 4))", "12"},
+		{"apply_single_arg", "(apply car '((1 2 3)))", "1"},
+		{"apply_empty_list", "(apply list '())", "()"},
+		{"apply_nested", "(apply + (apply list '(1 2 3)))", "6"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestApplyErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		expectedErr string
+	}{
+		{"apply_no_args", "(apply)", "apply expects arguments"},
+		{"apply_one_arg", "(apply +)", "expects at least 2 arguments"},
+		{"apply_improper_list", "(apply + '(1 . 2))", "expects a proper list"},
+		{"apply_non_list", "(apply + 1)", "expects a proper list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectError(t, tt.source, tt.expectedErr)
+		})
+	}
+}
+
+func TestTailApply(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"tail_apply_recursive", "(define sum-list (lambda (lst acc) (if (nil? lst) acc (apply sum-list (cdr lst) (list (+ acc (car lst))))))) (sum-list '(1 2 3 4 5) 0)", "15"},
+		{"tail_apply_in_tail_position", "(define test (lambda (f args) (if (nil? args) 0 (apply f args)))) (test + '(10 20 30))", "60"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestMacros(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"simple_macro", "(defmacro id (x) x) (id 42)", "42"},
+		{"macro_with_quote", "(defmacro const-list (x) (list 'quote (list x x x))) (const-list 5)", "(5 5 5)"},
+		{"macro_expansion", "(defmacro when (condition . body) (list 'if condition (cons 'begin body) '())) (when #t (+ 1 2) (* 3 4))", "12"},
+		{"macro_with_rest_params", "(defmacro my-list args (cons 'list args)) (my-list 1 2 3)", "(1 2 3)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestMacroErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		expectedErr string
+	}{
+		{"macro_too_few_args", "(defmacro needs-two (x y) (list '+ x y)) (needs-two 1)", "expects at least 2 arguments"},
+		{"macro_too_many_args_fixed", "(defmacro needs-one (x) x) (needs-one 1 2)", "expects 1 arguments"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectError(t, tt.source, tt.expectedErr)
+		})
+	}
+}
+
+func TestEval(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"eval_simple", "(eval '(+ 1 2))", "3"},
+		{"eval_quote", "(eval ''hello)", "hello"},
+		{"eval_lambda", "(eval '((lambda (x) (* x 2)) 5))", "10"},
+		{"eval_with_globals", "(define x 10) (eval 'x)", "10"},
+		{"eval_list_construction", "(eval (list '+ 1 2 3))", "6"},
+		{"eval_nested", "(eval (eval ''(+ 2 3)))", "5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestEvalErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		expectedErr string
+	}{
+		{"eval_no_args", "(eval)", "expects 1 argument"},
+		{"eval_too_many", "(eval '(+ 1 2) 'extra)", "expects 1 argument"},
+		{"eval_undefined", "(eval 'undefined-var)", "undefined variable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectError(t, tt.source, tt.expectedErr)
+		})
+	}
+}
+
+func TestQuasiquote(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"backquote_simple", "`hello", "hello"},
+		{"backquote_number", "`42", "42"},
+		{"backquote_list", "`(a b c)", "(a b c)"},
+		{"unquote_simple", "(define x 5) `(a ,x c)", "(a 5 c)"},
+		{"unquote_expression", "`(a ,(+ 1 2) c)", "(a 3 c)"},
+		{"unquote_multiple", "(define x 1) (define y 2) `(,x ,y)", "(1 2)"},
+		{"splice_simple", "`(a ,@(list 1 2 3) b)", "(a 1 2 3 b)"},
+		{"splice_empty", "`(a ,@() b)", "(a b)"},
+		{"splice_multiple", "`(,@(list 1 2) ,@(list 3 4))", "(1 2 3 4)"},
+		{"nested_backquote", "``(a ,x)", "(append (list (quote a)) (list x))"},
+		{"complex_quasiquote", "(define x 10) (define lst '(1 2 3)) `(x is ,x and list is ,@lst)", "(x is 10 and list is 1 2 3)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestNestedVariadic(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"variadic_in_variadic", "(define outer (lambda (x . rest) ((lambda (y . rest2) rest2) x rest))) (outer 1 2 3 4)", "((2 3 4))"},
+		{"variadic_tail_call", "(define sum-rest (lambda (acc . rest) 	(if (nil? rest) acc (apply sum-rest (+ acc (car rest)) (cdr rest))))) (sum-rest 0 1 2 3 4 5)", "15"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestDottedPairs(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"parse_dotted_pair", "'(a . b)", "(a . b)"},
+		{"parse_improper_list", "'(a b . c)", "(a b . c)"},
+		{"construct_dotted_pair", "(cons 'a 'b)", "(a . b)"},
+		{"car_dotted", "(car '(a . b))", "a"},
+		{"cdr_dotted", "(cdr '(a . b))", "b"},
+		{"nested_dotted", "'((a . b) . (c . d))", "((a . b) c . d)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestEmptyProgram(t *testing.T) {
+	evaluator := NewVM()
+	_, err := evaluate(evaluator, runtime.Stdlib)
+	if err != nil {
+		t.Fatalf("loading stdlib failed: %v", err)
+	}
+	result, err := evaluate(evaluator, "")
+	if err != nil {
+		t.Errorf("Empty program should not error: %v", err)
+	}
+	if result.String() != "()" {
+		t.Errorf("Expected (), got %s", result.String())
+	}
+}
+
+func TestAllComparisons(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"eq_nil", "(eq? () ())", "#t"},
+		{"eq_nil_false", "(eq? () 'a)", "()"},
+		{"eq_numbers_same", "(eq? 5 5)", "#t"},
+		{"eq_numbers_diff", "(eq? 5 6)", "()"},
+		{"eq_floats", "(eq? 3.14 3.14)", "#t"},
+		{"eq_atoms_same", "(eq? 'hello 'hello)", "#t"},
+		{"eq_atoms_diff", "(eq? 'hello 'world)", "()"},
+		{"eq_pairs", "(eq? (cons 1 2) (cons 1 2))", "()"}, // Different objects
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
+
+func TestArgumentChecking(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		expectedErr string
+	}{
+		{"cons_no_args", "(cons)", "expects 2 arguments"},
+		{"cons_one_arg", "(cons 1)", "expects 2 arguments"},
+		{"cons_three_args", "(cons 1 2 3)", "expects 2 arguments"},
+		{"car_no_args", "(car)", "expects 1 argument"},
+		{"car_two_args", "(car '(1 2) 'extra)", "expects 1 argument"},
+		{"atom_pred_no_args", "(atom?)", "expects 1 argument"},
+		{"nil_pred_two_args", "(nil? () ())", "expects 1 argument"},
+		{"eq_one_arg", "(eq? 'a)", "expects 2 arguments"},
+		{"num_eq_one_arg", "(= 5)", "expects 2 arguments"},
+		{"set_car_one_arg", "(set-car! '(1 2))", "expects 2 arguments"},
+		{"set_cdr_no_args", "(set-cdr!)", "expects 2 arguments"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectError(t, tt.source, tt.expectedErr)
+		})
+	}
+}
+
+func TestZeroArgumentBuiltins(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{"add_zero_args", "(+)", "0"},
+		{"mul_zero_args", "(*)", "1"},
+		{"and_zero_args", "(and)", "#t"},
+		{"or_zero_args", "(or)", "()"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalExpr(t, tt.source)
+			if result.String() != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result.String())
+			}
+		})
+	}
+}
