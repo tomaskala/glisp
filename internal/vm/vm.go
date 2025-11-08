@@ -43,7 +43,7 @@ type VM struct {
 }
 
 func newStack() []runtime.Value {
-	return make([]runtime.Value, 0, stackInit)
+	return make([]runtime.Value, stackInit)
 }
 
 func NewVM() *VM {
