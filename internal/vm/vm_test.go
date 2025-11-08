@@ -49,14 +49,14 @@ func evalExpr(t *testing.T, source string) runtime.Value {
 	}
 
 	// Assert VM state is clean after evaluation
-	if evaluator.StackTop != 0 {
-		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(evaluator.Stack))
+	if evaluator.stackTop != 0 {
+		t.Errorf("VM stack not empty after evaluation: %d items remaining", len(evaluator.stack))
 	}
-	if evaluator.NumFrames != 0 {
-		t.Errorf("VM frames not empty after evaluation: %d frames remaining", evaluator.NumFrames)
+	if evaluator.numFrames != 0 {
+		t.Errorf("VM frames not empty after evaluation: %d frames remaining", evaluator.numFrames)
 	}
-	if len(evaluator.OpenUpvalues) != 0 {
-		t.Errorf("VM open upvalues not empty after evaluation: %d upvalues remaining", len(evaluator.OpenUpvalues))
+	if len(evaluator.openUpvalues) != 0 {
+		t.Errorf("VM open upvalues not empty after evaluation: %d upvalues remaining", len(evaluator.openUpvalues))
 	}
 
 	return result
@@ -823,11 +823,11 @@ func TestErrorRecovery(t *testing.T) {
 		}
 
 		// VM should be reset and ready for next program
-		if evaluator.StackTop != 0 {
-			t.Errorf("VM stack not reset after error: %d items", len(evaluator.Stack))
+		if evaluator.stackTop != 0 {
+			t.Errorf("VM stack not reset after error: %d items", len(evaluator.stack))
 		}
-		if evaluator.NumFrames != 0 {
-			t.Errorf("VM frames not reset after error: %d frames", evaluator.NumFrames)
+		if evaluator.numFrames != 0 {
+			t.Errorf("VM frames not reset after error: %d frames", evaluator.numFrames)
 		}
 
 		// Should be able to run another program successfully

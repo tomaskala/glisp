@@ -29,80 +29,80 @@ type Frame struct {
 }
 
 type VM struct {
-	NumFrames int
+	numFrames int
 	frames    [framesMax]Frame
 
-	StackTop int
-	Stack    []runtime.Value
+	stackTop int
+	stack    []runtime.Value
 
-	OpenUpvalues []*runtime.Upvalue
+	openUpvalues []*runtime.Upvalue
 
 	globals map[runtime.Atom]runtime.Value
 	macros  map[runtime.Atom]runtime.Macro
 }
 
+func newStack() []runtime.Value {
+	return make([]runtime.Value, 0, stackInit)
+}
+
 func NewVM() *VM {
-	stack := make([]runtime.Value, 0, stackInit)
 	globals := LoadBuiltins()
-	return &VM{Stack: stack, globals: globals, macros: make(map[runtime.Atom]runtime.Macro)}
+	return &VM{stack: newStack(), globals: globals, macros: make(map[runtime.Atom]runtime.Macro)}
 }
 
 func (vm *VM) child() *VM {
-	child := NewVM()
-	child.globals = vm.globals
-	child.macros = vm.macros
-	return child
+	return &VM{stack: newStack(), globals: vm.globals, macros: vm.macros}
 }
 
 func (vm *VM) push(v runtime.Value) {
-	stackTop := vm.StackTop
-	if stackTop >= len(vm.Stack) {
-		vm.Stack = append(vm.Stack, runtime.Nil)
+	stackTop := vm.stackTop
+	if stackTop >= len(vm.stack) {
+		vm.stack = append(vm.stack, runtime.Nil)
 	}
-	vm.Stack[stackTop] = v
+	vm.stack[stackTop] = v
 	stackTop++
-	vm.StackTop = stackTop
+	vm.stackTop = stackTop
 }
 
 func (vm *VM) peek(dist int) runtime.Value {
-	return vm.Stack[vm.StackTop-1-dist]
+	return vm.stack[vm.stackTop-1-dist]
 }
 
 // setTop implements the runtime.Evaluator interface.
 func (vm *VM) setTop(v runtime.Value) {
-	vm.Stack[vm.StackTop-1] = v
+	vm.stack[vm.stackTop-1] = v
 }
 
 // pop implements the runtime.Evaluator interface.
 func (vm *VM) pop() runtime.Value {
-	vm.StackTop--
-	return vm.Stack[vm.StackTop]
+	vm.stackTop--
+	return vm.stack[vm.stackTop]
 }
 
 // popSlice implements the runtime.Evaluator interface.
 func (vm *VM) popSlice(n int) []runtime.Value {
-	base := vm.StackTop - n
-	args := vm.Stack[base : base+n]
-	vm.StackTop = base
+	base := vm.stackTop - n
+	args := vm.stack[base : base+n]
+	vm.stackTop = base
 	return args
 }
 
 func (vm *VM) pushFrame(closure *runtime.Closure, base int) error {
-	if vm.NumFrames == framesMax {
+	if vm.numFrames == framesMax {
 		return vm.runtimeError("stack overflow")
 	}
-	vm.frames[vm.NumFrames] = Frame{closure: closure, base: base}
-	vm.NumFrames++
+	vm.frames[vm.numFrames] = Frame{closure: closure, base: base}
+	vm.numFrames++
 	return nil
 }
-func (vm *VM) peekFrame() *Frame { return &vm.frames[vm.NumFrames-1] }
-func (vm *VM) popFrame()         { vm.NumFrames-- }
+func (vm *VM) peekFrame() *Frame { return &vm.frames[vm.numFrames-1] }
+func (vm *VM) popFrame()         { vm.numFrames-- }
 
 func (vm *VM) runtimeError(format string, args ...any) error {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf(format, args...))
 	builder.WriteByte('\n')
-	for _, frame := range slices.Backward(vm.frames[:vm.NumFrames]) {
+	for _, frame := range slices.Backward(vm.frames[:vm.numFrames]) {
 		function := frame.closure.Function
 		builder.WriteString("  in ")
 		builder.WriteString(function.Name.Value())
@@ -110,35 +110,35 @@ func (vm *VM) runtimeError(format string, args ...any) error {
 		builder.WriteString(strconv.Itoa(function.Chunk.Lines[frame.ip-1]))
 		builder.WriteString(")\n")
 	}
-	vm.NumFrames = 0
-	vm.StackTop = 0
-	vm.OpenUpvalues = vm.OpenUpvalues[:0]
+	vm.numFrames = 0
+	vm.stackTop = 0
+	vm.openUpvalues = vm.openUpvalues[:0]
 	return &RuntimeError{builder.String()}
 }
 
 func (vm *VM) captureUpvalue(idx int) *runtime.Upvalue {
-	for _, uv := range vm.OpenUpvalues {
+	for _, uv := range vm.openUpvalues {
 		if !uv.IsClosed && uv.Index == idx {
 			return uv
 		}
 	}
 	uv := &runtime.Upvalue{Index: idx}
-	vm.OpenUpvalues = append(vm.OpenUpvalues, uv)
+	vm.openUpvalues = append(vm.openUpvalues, uv)
 	return uv
 }
 
 func (vm *VM) closeUpvalues(last int) {
-	remaining := vm.OpenUpvalues[:0]
-	for _, uv := range vm.OpenUpvalues {
+	remaining := vm.openUpvalues[:0]
+	for _, uv := range vm.openUpvalues {
 		if !uv.IsClosed && uv.Index >= last {
 			uv.IsClosed = true
-			uv.ClosedVal = vm.Stack[uv.Index]
+			uv.ClosedVal = vm.stack[uv.Index]
 			uv.Index = -1
 		} else {
 			remaining = append(remaining, uv)
 		}
 	}
-	vm.OpenUpvalues = remaining
+	vm.openUpvalues = remaining
 }
 
 func (vm *VM) checkArgs(closure *runtime.Closure, argCount int) error {
@@ -173,14 +173,14 @@ func (vm *VM) callValue(callee runtime.Value, argCount int) error {
 
 func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
 	function := closure.Function
-	base := vm.StackTop - argCount
+	base := vm.stackTop - argCount
 	if function.HasRestParam {
 		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
-			arg := vm.Stack[base+i]
+			arg := vm.stack[base+i]
 			restArgs = runtime.Cons(arg, restArgs)
 		}
-		vm.StackTop = base + function.Arity
+		vm.stackTop = base + function.Arity
 		vm.push(restArgs)
 	}
 	return vm.pushFrame(closure, base)
@@ -206,24 +206,24 @@ func (vm *VM) tailCallClosure(closure *runtime.Closure, argCount int) {
 	currentFrame := vm.peekFrame()
 	newArgCount := argCount
 	if function.HasRestParam {
-		base := vm.StackTop - argCount
+		base := vm.stackTop - argCount
 		restArgs := runtime.Nil
 		for i := argCount - 1; i >= function.Arity; i-- {
-			arg := vm.Stack[base+i]
+			arg := vm.stack[base+i]
 			restArgs = runtime.Cons(arg, restArgs)
 		}
-		vm.StackTop = base + function.Arity
+		vm.stackTop = base + function.Arity
 		vm.push(restArgs)
 		newArgCount = function.Arity + 1
 	}
 	vm.closeUpvalues(currentFrame.base)
 	newBase := currentFrame.base
-	oldStackTop := vm.StackTop
+	oldStackTop := vm.stackTop
 	newArgsStart := oldStackTop - newArgCount
 	for i := range newArgCount {
-		vm.Stack[newBase+i] = vm.Stack[newArgsStart+i]
+		vm.stack[newBase+i] = vm.stack[newArgsStart+i]
 	}
-	vm.StackTop = newBase + newArgCount
+	vm.stackTop = newBase + newArgCount
 	currentFrame.closure = closure
 	currentFrame.ip = 0
 }
@@ -297,17 +297,17 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			result := vm.pop()
 			vm.closeUpvalues(frame.base)
 			vm.popFrame()
-			if vm.NumFrames == 0 {
+			if vm.numFrames == 0 {
 				return result, nil
 			}
-			vm.StackTop = frame.base - 1
+			vm.stackTop = frame.base - 1
 			vm.push(result)
 		case runtime.OpGetLocal:
 			slot := int(readOpCode(frame))
-			vm.push(vm.Stack[frame.base+slot])
+			vm.push(vm.stack[frame.base+slot])
 		case runtime.OpSetLocal:
 			slot := int(readOpCode(frame))
-			vm.Stack[frame.base+slot] = vm.pop()
+			vm.stack[frame.base+slot] = vm.pop()
 			vm.push(runtime.Nil)
 		case runtime.OpGetUpvalue:
 			slot := int(readOpCode(frame))
@@ -315,7 +315,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			if upvalue.IsClosed {
 				vm.push(upvalue.ClosedVal)
 			} else {
-				vm.push(vm.Stack[upvalue.Index])
+				vm.push(vm.stack[upvalue.Index])
 			}
 		case runtime.OpSetUpvalue:
 			slot := int(readOpCode(frame))
@@ -323,7 +323,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			if upvalue.IsClosed {
 				upvalue.ClosedVal = vm.pop()
 			} else {
-				vm.Stack[upvalue.Index] = vm.pop()
+				vm.stack[upvalue.Index] = vm.pop()
 			}
 			vm.push(runtime.Nil)
 		case runtime.OpGetGlobal:
