@@ -47,7 +47,7 @@ func NewVM() *VM {
 	return &VM{Stack: stack, globals: globals, macros: make(map[runtime.Atom]runtime.Macro)}
 }
 
-func (vm *VM) Child() runtime.Evaluator {
+func (vm *VM) child() *VM {
 	child := NewVM()
 	child.globals = vm.globals
 	child.macros = vm.macros
@@ -68,19 +68,19 @@ func (vm *VM) peek(dist int) runtime.Value {
 	return vm.Stack[vm.StackTop-1-dist]
 }
 
-// SetTop implements the runtime.Evaluator interface.
-func (vm *VM) SetTop(v runtime.Value) {
+// setTop implements the runtime.Evaluator interface.
+func (vm *VM) setTop(v runtime.Value) {
 	vm.Stack[vm.StackTop-1] = v
 }
 
-// Pop implements the runtime.Evaluator interface.
-func (vm *VM) Pop() runtime.Value {
+// pop implements the runtime.Evaluator interface.
+func (vm *VM) pop() runtime.Value {
 	vm.StackTop--
 	return vm.Stack[vm.StackTop]
 }
 
-// PopSlice implements the runtime.Evaluator interface.
-func (vm *VM) PopSlice(n int) []runtime.Value {
+// popSlice implements the runtime.Evaluator interface.
+func (vm *VM) popSlice(n int) []runtime.Value {
 	base := vm.StackTop - n
 	args := vm.Stack[base : base+n]
 	vm.StackTop = base
@@ -169,14 +169,6 @@ func (vm *VM) callValue(callee runtime.Value, argCount int) error {
 		return vm.callClosure(closure, argCount)
 	}
 	return vm.runtimeError("attempting to call %v", callee)
-}
-
-func (vm *VM) callBuiltin(builtin runtime.Builtin, argCount int) error {
-	err := builtin(vm, argCount)
-	if err != nil {
-		return vm.runtimeError("%s", err.Error())
-	}
-	return nil
 }
 
 func (vm *VM) callClosure(closure *runtime.Closure, argCount int) error {
@@ -302,7 +294,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 				return runtime.Nil, err
 			}
 		case runtime.OpReturn:
-			result := vm.Pop()
+			result := vm.pop()
 			vm.closeUpvalues(frame.base)
 			vm.popFrame()
 			if vm.NumFrames == 0 {
@@ -315,7 +307,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			vm.push(vm.Stack[frame.base+slot])
 		case runtime.OpSetLocal:
 			slot := int(readOpCode(frame))
-			vm.Stack[frame.base+slot] = vm.Pop()
+			vm.Stack[frame.base+slot] = vm.pop()
 			vm.push(runtime.Nil)
 		case runtime.OpGetUpvalue:
 			slot := int(readOpCode(frame))
@@ -329,9 +321,9 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			slot := int(readOpCode(frame))
 			upvalue := frame.closure.Upvalues[slot]
 			if upvalue.IsClosed {
-				upvalue.ClosedVal = vm.Pop()
+				upvalue.ClosedVal = vm.pop()
 			} else {
-				vm.Stack[upvalue.Index] = vm.Pop()
+				vm.Stack[upvalue.Index] = vm.pop()
 			}
 			vm.push(runtime.Nil)
 		case runtime.OpGetGlobal:
@@ -343,13 +335,13 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			vm.push(value)
 		case runtime.OpDefineGlobal:
 			name := readAtom(frame)
-			vm.globals[name] = vm.Pop()
+			vm.globals[name] = vm.pop()
 		case runtime.OpSetGlobal:
 			atom := readAtom(frame)
 			if _, ok := vm.globals[atom]; !ok {
 				return runtime.Nil, vm.runtimeError("attempting to set an undefined variable: %s", atom.Value())
 			}
-			vm.globals[atom] = vm.Pop()
+			vm.globals[atom] = vm.pop()
 			vm.push(runtime.Nil)
 		case runtime.OpClosure:
 			function := readFunction(frame)
@@ -366,7 +358,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 			}
 			vm.push(runtime.MakeClosure(closure))
 		case runtime.OpPop:
-			vm.Pop()
+			vm.pop()
 		case runtime.OpJump:
 			offset := int(readOpCode(frame))
 			frame.ip += offset
@@ -387,7 +379,7 @@ func (vm *VM) Run(program *runtime.Program) (runtime.Value, error) {
 }
 
 func (vm *VM) unpackList() (int, error) {
-	argList := vm.Pop()
+	argList := vm.pop()
 	listLen := 0
 	for argList.IsPair() {
 		pair := argList.AsPair()

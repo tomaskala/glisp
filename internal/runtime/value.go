@@ -13,15 +13,6 @@ type MacroRegistry interface {
 	ExpandMacro(Macro, Value) (Value, error)
 }
 
-type Evaluator interface {
-	MacroRegistry
-	Run(*Program) (Value, error)
-	Child() Evaluator
-	SetTop(Value)
-	Pop() Value
-	PopSlice(int) []Value
-}
-
 type valueType int
 
 const (
@@ -93,8 +84,8 @@ func MakeClosure(c *Closure) Value {
 	return Value{typ: typeClosure, ptr: unsafe.Pointer(c)}
 }
 
-func MakeBuiltin(b Builtin) Value {
-	return Value{typ: typeBuiltin, ptr: unsafe.Pointer(&b)}
+func MakeBuiltin(n int) Value {
+	return Value{typ: typeBuiltin, num: float64(n)}
 }
 
 // Type checks
@@ -132,8 +123,8 @@ func (v Value) AsClosure() *Closure {
 	return (*Closure)(v.ptr)
 }
 
-func (v Value) AsBuiltin() Builtin {
-	return *(*Builtin)(v.ptr)
+func (v Value) AsBuiltin() int {
+	return int(v.num)
 }
 
 var (
@@ -178,8 +169,6 @@ type Closure struct {
 	Function *Function
 	Upvalues []*Upvalue
 }
-
-type Builtin func(Evaluator, int) error
 
 func (v Value) String() string {
 	switch v.typ {

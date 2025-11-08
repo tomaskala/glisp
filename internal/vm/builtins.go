@@ -1,23 +1,22 @@
 package vm
 
 import (
-	"errors"
 	"fmt"
 
 	"tomaskala.com/glisp/internal/compiler"
 	"tomaskala.com/glisp/internal/runtime"
 )
 
-func checkArgs(n, expected int, name string) error {
+func checkArgs(vm *VM, n, expected int, name string) error {
 	if n != expected {
-		return fmt.Errorf("%s expects %d arguments, got %d", name, expected, n)
+		return vm.runtimeError("%s expects %d arguments, got %d", name, expected, n)
 	}
 	return nil
 }
 
-func checkNonZeroArgs(n int, name string) error {
+func checkNonZeroArgs(vm *VM, n int, name string) error {
 	if n == 0 {
-		return fmt.Errorf("%s expects at least 1 argument, got %d", name, n)
+		return vm.runtimeError("%s expects at least 1 argument, got %d", name, n)
 	}
 	return nil
 }
@@ -48,13 +47,13 @@ func relNumOp(l, r runtime.Value, op func(float64, float64) bool) (runtime.Value
 	return runtime.Nil, true
 }
 
-func builtinEval(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "eval"); err != nil {
+func builtinEval(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "eval"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
-	child := vm.Child()
+	arg := vm.pop()
+	child := vm.child()
 
 	c := compiler.NewCompiler("eval", child)
 	prog, err := c.Compile(arg)
@@ -67,346 +66,391 @@ func builtinEval(vm runtime.Evaluator, n int) error {
 		return err
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinCons(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, "cons"); err != nil {
+func builtinCons(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, "cons"); err != nil {
 		return err
 	}
 
-	cdr := vm.Pop()
-	car := vm.Pop()
-	vm.SetTop(runtime.Cons(car, cdr))
+	cdr := vm.pop()
+	car := vm.pop()
+	vm.setTop(runtime.Cons(car, cdr))
 	return nil
 }
 
-func builtinCar(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "car"); err != nil {
+func builtinCar(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "car"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
+	arg := vm.pop()
 	if !arg.IsPair() {
-		return errors.New("car expects a pair")
+		return vm.runtimeError("car expects a pair")
 	}
 
-	vm.SetTop(arg.AsPair().Car)
+	vm.setTop(arg.AsPair().Car)
 	return nil
 }
 
-func builtinCdr(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "cdr"); err != nil {
+func builtinCdr(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "cdr"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
+	arg := vm.pop()
 	if !arg.IsPair() {
-		return errors.New("cdr expects a pair")
+		return vm.runtimeError("cdr expects a pair")
 	}
 
-	vm.SetTop(arg.AsPair().Cdr)
+	vm.setTop(arg.AsPair().Cdr)
 	return nil
 }
 
-func builtinAdd(vm runtime.Evaluator, n int) error {
+func builtinAdd(vm *VM, n int) error {
 	if n == 0 {
-		vm.SetTop(runtime.MakeNumber(0))
+		vm.setTop(runtime.MakeNumber(0))
 		return nil
 	}
 
-	args := vm.PopSlice(n)
+	args := vm.popSlice(n)
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc + n })
 	if !ok {
-		return errors.New("+ is only defined for numbers")
+		return vm.runtimeError("+ is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinSub(vm runtime.Evaluator, n int) error {
-	if err := checkNonZeroArgs(n, "-"); err != nil {
+func builtinSub(vm *VM, n int) error {
+	if err := checkNonZeroArgs(vm, n, "-"); err != nil {
 		return err
 	}
 
 	if n == 1 {
-		arg := vm.Pop()
+		arg := vm.pop()
 		if !arg.IsNumber() {
-			return errors.New("- is only defined for numbers")
+			return vm.runtimeError("- is only defined for numbers")
 		}
 
-		vm.SetTop(runtime.MakeNumber(-arg.AsNumber()))
+		vm.setTop(runtime.MakeNumber(-arg.AsNumber()))
 		return nil
 	}
 
-	args := vm.PopSlice(n)
+	args := vm.popSlice(n)
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc - n })
 	if !ok {
-		return errors.New("- is only defined for numbers")
+		return vm.runtimeError("- is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinMul(vm runtime.Evaluator, n int) error {
+func builtinMul(vm *VM, n int) error {
 	if n == 0 {
-		vm.SetTop(runtime.MakeNumber(1))
+		vm.setTop(runtime.MakeNumber(1))
 		return nil
 	}
 
-	args := vm.PopSlice(n)
+	args := vm.popSlice(n)
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc * n })
 	if !ok {
-		return errors.New("* is only defined for numbers")
+		return vm.runtimeError("* is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinDiv(vm runtime.Evaluator, n int) error {
-	if err := checkNonZeroArgs(n, "/"); err != nil {
+func builtinDiv(vm *VM, n int) error {
+	if err := checkNonZeroArgs(vm, n, "/"); err != nil {
 		return err
 	}
 
 	if n == 1 {
-		arg := vm.Pop()
+		arg := vm.pop()
 		if !arg.IsNumber() {
-			return errors.New("/ is only defined for numbers")
+			return vm.runtimeError("/ is only defined for numbers")
 		}
-		vm.SetTop(runtime.MakeNumber(1 / arg.AsNumber()))
+		vm.setTop(runtime.MakeNumber(1 / arg.AsNumber()))
 		return nil
 	}
 
-	args := vm.PopSlice(n)
+	args := vm.popSlice(n)
 	result, ok := varNumOp(args, func(acc, n float64) float64 { return acc / n })
 	if !ok {
-		return errors.New("/ is only defined for numbers")
+		return vm.runtimeError("/ is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinNumEq(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, ">="); err != nil {
+func builtinNumEq(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	result, ok := relNumOp(l, r, func(a, b float64) bool { return a == b })
 	if !ok {
-		return errors.New("= is only defined for numbers")
+		return vm.runtimeError("= is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinNumLt(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, ">="); err != nil {
+func builtinNumLt(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	result, ok := relNumOp(l, r, func(a, b float64) bool { return a < b })
 	if !ok {
-		return errors.New("< is only defined for numbers")
+		return vm.runtimeError("< is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinNumLte(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, ">="); err != nil {
+func builtinNumLte(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	result, ok := relNumOp(l, r, func(a, b float64) bool { return a <= b })
 	if !ok {
-		return errors.New("<= is only defined for numbers")
+		return vm.runtimeError("<= is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinNumGt(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, ">="); err != nil {
+func builtinNumGt(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	result, ok := relNumOp(l, r, func(a, b float64) bool { return a > b })
 	if !ok {
-		return errors.New("> is only defined for numbers")
+		return vm.runtimeError("> is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinNumGte(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, ">="); err != nil {
+func builtinNumGte(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	result, ok := relNumOp(l, r, func(a, b float64) bool { return a >= b })
 	if !ok {
-		return errors.New(">= is only defined for numbers")
+		return vm.runtimeError(">= is only defined for numbers")
 	}
 
-	vm.SetTop(result)
+	vm.setTop(result)
 	return nil
 }
 
-func builtinEq(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, "eq?"); err != nil {
+func builtinEq(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, "eq?"); err != nil {
 		return err
 	}
 
-	r := vm.Pop()
-	l := vm.Pop()
+	r := vm.pop()
+	l := vm.pop()
 	if l == r {
-		vm.SetTop(runtime.True)
+		vm.setTop(runtime.True)
 	} else {
-		vm.SetTop(runtime.MakeNil())
+		vm.setTop(runtime.MakeNil())
 	}
 
 	return nil
 }
 
-func builtinIsAtom(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "atom?"); err != nil {
+func builtinIsAtom(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "atom?"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
+	arg := vm.pop()
 	if arg.IsAtom() {
-		vm.SetTop(runtime.True)
+		vm.setTop(runtime.True)
 	} else {
-		vm.SetTop(runtime.MakeNil())
+		vm.setTop(runtime.MakeNil())
 	}
 
 	return nil
 }
 
-func builtinIsNil(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "nil?"); err != nil {
+func builtinIsNil(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "nil?"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
+	arg := vm.pop()
 	if runtime.IsTruthy(arg) {
-		vm.SetTop(runtime.MakeNil())
+		vm.setTop(runtime.MakeNil())
 	} else {
-		vm.SetTop(runtime.True)
+		vm.setTop(runtime.True)
 	}
 
 	return nil
 }
 
-func builtinIsPair(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "pair?"); err != nil {
+func builtinIsPair(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "pair?"); err != nil {
 		return err
 	}
 
-	arg := vm.Pop()
+	arg := vm.pop()
 	if arg.IsPair() {
-		vm.SetTop(runtime.True)
+		vm.setTop(runtime.True)
 	} else {
-		vm.SetTop(runtime.MakeNil())
+		vm.setTop(runtime.MakeNil())
 	}
 
 	return nil
 }
 
-func builtinSetCar(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, "set-car!"); err != nil {
+func builtinSetCar(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, "set-car!"); err != nil {
 		return err
 	}
 
-	car := vm.Pop()
-	arg := vm.Pop()
+	car := vm.pop()
+	arg := vm.pop()
 	if !arg.IsPair() {
-		return errors.New("set-car! expects a pair")
+		return vm.runtimeError("set-car! expects a pair")
 	}
 
 	arg.AsPair().Car = car
-	vm.SetTop(runtime.MakeNil())
+	vm.setTop(runtime.MakeNil())
 	return nil
 }
 
-func builtinSetCdr(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 2, "set-cdr!"); err != nil {
+func builtinSetCdr(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 2, "set-cdr!"); err != nil {
 		return err
 	}
 
-	cdr := vm.Pop()
-	arg := vm.Pop()
+	cdr := vm.pop()
+	arg := vm.pop()
 	if !arg.IsPair() {
-		return errors.New("set-cdr! expects a pair")
+		return vm.runtimeError("set-cdr! expects a pair")
 	}
 
 	arg.AsPair().Cdr = cdr
-	vm.SetTop(runtime.MakeNil())
+	vm.setTop(runtime.MakeNil())
 	return nil
 }
 
-func builtinDisplay(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 1, "display"); err != nil {
+func builtinDisplay(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "display"); err != nil {
 		return err
 	}
 
-	fmt.Println(vm.Pop())
-	vm.SetTop(runtime.MakeNil())
+	fmt.Println(vm.pop())
+	vm.setTop(runtime.MakeNil())
 	return nil
 }
 
-func builtinNewline(vm runtime.Evaluator, n int) error {
-	if err := checkArgs(n, 0, "newline"); err != nil {
+func builtinNewline(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 0, "newline"); err != nil {
 		return err
 	}
 
 	fmt.Println()
-	vm.SetTop(runtime.MakeNil())
+	vm.setTop(runtime.MakeNil())
 	return nil
 }
 
-func LoadBuiltins() map[runtime.Atom]runtime.Value {
-	return map[runtime.Atom]runtime.Value{
-		runtime.NewAtom("#t"):       runtime.True,
-		runtime.NewAtom("eval"):     runtime.MakeBuiltin(builtinEval),
-		runtime.NewAtom("cons"):     runtime.MakeBuiltin(builtinCons),
-		runtime.NewAtom("car"):      runtime.MakeBuiltin(builtinCar),
-		runtime.NewAtom("cdr"):      runtime.MakeBuiltin(builtinCdr),
-		runtime.NewAtom("+"):        runtime.MakeBuiltin(builtinAdd),
-		runtime.NewAtom("-"):        runtime.MakeBuiltin(builtinSub),
-		runtime.NewAtom("*"):        runtime.MakeBuiltin(builtinMul),
-		runtime.NewAtom("/"):        runtime.MakeBuiltin(builtinDiv),
-		runtime.NewAtom("="):        runtime.MakeBuiltin(builtinNumEq),
-		runtime.NewAtom("<"):        runtime.MakeBuiltin(builtinNumLt),
-		runtime.NewAtom("<="):       runtime.MakeBuiltin(builtinNumLte),
-		runtime.NewAtom(">"):        runtime.MakeBuiltin(builtinNumGt),
-		runtime.NewAtom(">="):       runtime.MakeBuiltin(builtinNumGte),
-		runtime.NewAtom("eq?"):      runtime.MakeBuiltin(builtinEq),
-		runtime.NewAtom("atom?"):    runtime.MakeBuiltin(builtinIsAtom),
-		runtime.NewAtom("nil?"):     runtime.MakeBuiltin(builtinIsNil),
-		runtime.NewAtom("pair?"):    runtime.MakeBuiltin(builtinIsPair),
-		runtime.NewAtom("set-car!"): runtime.MakeBuiltin(builtinSetCar),
-		runtime.NewAtom("set-cdr!"): runtime.MakeBuiltin(builtinSetCdr),
-		runtime.NewAtom("display"):  runtime.MakeBuiltin(builtinDisplay),
-		runtime.NewAtom("newline"):  runtime.MakeBuiltin(builtinNewline),
+var (
+	// The two slices must be kept in the same order.
+	builtinsNames     []runtime.Atom
+	builtinsFunctions []func(*VM, int) error
+)
+
+func init() {
+	builtinsNames = []runtime.Atom{
+		runtime.NewAtom("eval"),
+		runtime.NewAtom("cons"),
+		runtime.NewAtom("car"),
+		runtime.NewAtom("cdr"),
+		runtime.NewAtom("+"),
+		runtime.NewAtom("-"),
+		runtime.NewAtom("*"),
+		runtime.NewAtom("/"),
+		runtime.NewAtom("="),
+		runtime.NewAtom("<"),
+		runtime.NewAtom("<="),
+		runtime.NewAtom(">"),
+		runtime.NewAtom(">="),
+		runtime.NewAtom("eq?"),
+		runtime.NewAtom("atom?"),
+		runtime.NewAtom("nil?"),
+		runtime.NewAtom("pair?"),
+		runtime.NewAtom("set-car!"),
+		runtime.NewAtom("set-cdr!"),
+		runtime.NewAtom("display"),
+		runtime.NewAtom("newline"),
 	}
+
+	builtinsFunctions = []func(*VM, int) error{
+		builtinEval,
+		builtinCons,
+		builtinCar,
+		builtinCdr,
+		builtinAdd,
+		builtinSub,
+		builtinMul,
+		builtinDiv,
+		builtinNumEq,
+		builtinNumLt,
+		builtinNumLte,
+		builtinNumGt,
+		builtinNumGte,
+		builtinEq,
+		builtinIsAtom,
+		builtinIsNil,
+		builtinIsPair,
+		builtinSetCar,
+		builtinSetCdr,
+		builtinDisplay,
+		builtinNewline,
+	}
+}
+
+func LoadBuiltins() map[runtime.Atom]runtime.Value {
+	builtins := make(map[runtime.Atom]runtime.Value)
+	builtins[runtime.NewAtom("#t")] = runtime.True
+
+	for i, name := range builtinsNames {
+		builtins[name] = runtime.MakeBuiltin(i)
+	}
+
+	return builtins
+}
+
+func (vm *VM) callBuiltin(idx int, argCount int) error {
+	builtin := builtinsFunctions[idx]
+	return builtin(vm, argCount)
 }
