@@ -2,14 +2,6 @@
 (defun list? (x)
   (or (nil? x) (pair? x)))
 
-;; Generate a range of integers between the two bounds, inclusive.
-(defun int-range (bottom top)
-  (letrec ((int-range-acc
-             (lambda (curr acc)
-               (if (> curr top) acc
-                 (int-range-acc (+ curr 1) (cons (+ (- top curr) 1) acc))))))
-    (int-range-acc bottom ())))
-
 ;; Retrieve the n-th element from a list, counting from one.
 (defun nth (lst n)
   (cond ((> n (length lst)) 0)
@@ -43,27 +35,24 @@
 
 ;; Get the next value of a row based on the simulation rules.
 (defun next-row (world y)
-  (let ((xs (int-range 1 (length (nth world y)))))
+  (let ((xs (range 1 (+ 1 (length (nth world y))))))
     (map (lambda (x) (next-cell world x y)) xs)))
 
 ;; Evolve a world into the next generation.
 (defun evolve (world)
-  (let ((ys (int-range 1 (length world))))
+  (let ((ys (range 1 (+ 1 (length world)))))
     (map (lambda (y) (next-row world y)) ys)))
 
 ;; Simulate the game of life for several steps.
 (defun simulate (world n)
-    (if (= n 0) world
-      (simulate (evolve world) (- n 1))))
+  (if (= n 0) world
+    (simulate (evolve world) (- n 1))))
 
 ;; Pretty-print a simulated world.
 (defun print-world (world)
   (let* ((prepare-cell (lambda (x) (if (= x 0) '_ '#)))
-         (prepare-row (lambda (row) (map prepare-cell row))))
-    (if (nil? world) ()
-      (begin
-        (display (prepare-row (car world)))
-        (print-world (cdr world))))))
+         (prepare-row (partial map prepare-cell)))
+    (for-each display (map prepare-row world))))
 
 (define world
   '((0 0 1 0 0 0 0 0)
