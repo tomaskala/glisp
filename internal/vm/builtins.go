@@ -201,6 +201,21 @@ func builtinDiv(vm *VM, n int) error {
 	return nil
 }
 
+func builtinInt(vm *VM, n int) error {
+	if err := checkArgs(vm, n, 1, "int"); err != nil {
+		return err
+	}
+
+	arg := vm.pop()
+	if !arg.IsNumber() {
+		return vm.runtimeError("int is only defined for numbers")
+	}
+	num := arg.AsNumber()
+
+	vm.setTop(runtime.MakeNumber(float64(int(num))))
+	return nil
+}
+
 func builtinNumEq(vm *VM, n int) error {
 	if err := checkArgs(vm, n, 2, ">="); err != nil {
 		return err
@@ -411,6 +426,7 @@ func init() {
 		runtime.NewAtom("-"),
 		runtime.NewAtom("*"),
 		runtime.NewAtom("/"),
+		runtime.NewAtom("int"),
 		runtime.NewAtom("="),
 		runtime.NewAtom("<"),
 		runtime.NewAtom("<="),
@@ -436,6 +452,7 @@ func init() {
 		builtinSub,
 		builtinMul,
 		builtinDiv,
+		builtinInt,
 		builtinNumEq,
 		builtinNumLt,
 		builtinNumLte,
