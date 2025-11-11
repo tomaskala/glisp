@@ -19,8 +19,8 @@
 ;; append concatenates an arbitrary number of lists together.
 ;; Required for backquoting.
 ;;
-;; time: O(n)
-;; space: O(n)
+;; time: O(n1 + ... + nk), where ni is the length of the i-th list
+;; space: O(n1 + ... + nk), where ni is the length of the i-th list
 ;; tail-recursive: no
 (define append
   (lambda (lst . args)
@@ -84,7 +84,7 @@
           ,body))
       ,@(map (lambda (x) '()) bindings))))
 
-;; when conditionally evaluates its actions without an else clause
+;; when conditionally evaluates its actions without an else clause.
 (defmacro when (test . body)
   `(if ,test (begin ,@body) '()))
 
@@ -168,7 +168,7 @@
                     clauses)))))
 
 ;; not negates its argument: the empty list becomes #t, everything else becomes
-;; the empty list
+;; the empty list.
 ;;
 ;; time: O(1)
 ;; space: O(1)
@@ -189,7 +189,7 @@
 ;; Higher-order functions
 ;; ============================================================================
 
-;; id is an identity function
+;; id is an identity function.
 ;;
 ;; time: O(1)
 ;; space: O(1)
@@ -368,7 +368,7 @@
 
 ;; flatten recursively flattens nested lists.
 ;;
-;; time: O(n)
+;; time: O(n*d), where d is the maximum level of nesting
 ;; space: O(n)
 ;; tail-recursive: no
 (defun flatten (lst)
@@ -387,7 +387,7 @@
     (car lst)
     (last (cdr lst))))
 
-;; for-each applies a function to each element for side effects
+;; for-each applies a function to each element for side effects.
 ;;
 ;; time: O(n)
 ;; space: O(1)
