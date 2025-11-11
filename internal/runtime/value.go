@@ -84,7 +84,7 @@ func MakeClosure(c *Closure) Value {
 	return Value{typ: typeClosure, ptr: unsafe.Pointer(c)}
 }
 
-func MakeBuiltin(n int) Value {
+func MakeBuiltin(n Builtin) Value {
 	return Value{typ: typeBuiltin, num: float64(n)}
 }
 
@@ -123,8 +123,8 @@ func (v Value) AsClosure() *Closure {
 	return (*Closure)(v.ptr)
 }
 
-func (v Value) AsBuiltin() int {
-	return int(v.num)
+func (v Value) AsBuiltin() Builtin {
+	return Builtin(v.num)
 }
 
 var (
@@ -169,6 +169,8 @@ type Closure struct {
 	Function *Function
 	Upvalues []*Upvalue
 }
+
+type Builtin int
 
 func (v Value) String() string {
 	switch v.typ {

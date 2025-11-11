@@ -474,13 +474,13 @@ func LoadBuiltins() map[runtime.Atom]runtime.Value {
 	builtins[runtime.NewAtom("#t")] = runtime.True
 
 	for i, name := range builtinsNames {
-		builtins[name] = runtime.MakeBuiltin(i)
+		builtins[name] = runtime.MakeBuiltin(runtime.Builtin(i))
 	}
 
 	return builtins
 }
 
-func (vm *VM) callBuiltin(idx int, argCount int) error {
-	builtin := builtinsFunctions[idx]
+func (vm *VM) callBuiltin(b runtime.Builtin, argCount int) error {
+	builtin := builtinsFunctions[b]
 	return builtin(vm, argCount)
 }
