@@ -51,11 +51,14 @@ func (a Atom) Value() string {
 	return unique.Handle[string](a).Value()
 }
 
+type Line int
+
 type Value struct {
 	typ  valueType
 	num  float64
 	atom Atom
 	ptr  unsafe.Pointer
+	Line Line
 }
 
 // Constructors

@@ -108,7 +108,7 @@ func (vm *VM) runtimeError(format string, args ...any) error {
 		builder.WriteString("  in ")
 		builder.WriteString(function.Name.Value())
 		builder.WriteString(" (line ")
-		builder.WriteString(strconv.Itoa(function.Chunk.Lines[frame.ip-1]))
+		builder.WriteString(strconv.Itoa(int(function.Chunk.Lines[frame.ip-1])))
 		builder.WriteString(")\n")
 	}
 	vm.numFrames = 0

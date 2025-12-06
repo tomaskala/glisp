@@ -8,7 +8,7 @@ import (
 )
 
 type CompileError struct {
-	Line    int
+	Line    runtime.Line
 	Message string
 }
 
@@ -35,45 +35,41 @@ func newCompiler(parent *Compiler, name runtime.Atom, macros runtime.MacroRegist
 	}
 }
 
-func (c *Compiler) errorf(format string, args ...any) error {
+func (c *Compiler) errorf(line runtime.Line, format string, args ...any) error {
 	message := fmt.Sprintf(format, args...)
-	// TODO: Emit the current line
-	// return &CompileError{c.parser.current.Line, message}
-	return &CompileError{1, message}
+	return &CompileError{line, message}
 }
 
-func (c *Compiler) emit(code runtime.OpCode) {
-	// TODO: Write the current line
-	// c.function.Chunk.Write(code, c.parser.previous.Line)
-	c.function.Chunk.Write(code, 1)
+func (c *Compiler) emit(code runtime.OpCode, line runtime.Line) {
+	c.function.Chunk.Write(code, line)
 }
 
-func (c *Compiler) emitArg(code runtime.OpCode, arg int) {
-	c.emit(code)
-	c.emit(c.opcodeInt(arg))
+func (c *Compiler) emitArg(code runtime.OpCode, arg int, line runtime.Line) {
+	c.emit(code, line)
+	c.emit(c.opcodeInt(arg, line), line)
 }
 
-func (c *Compiler) emitJump(code runtime.OpCode) int {
-	c.emitArg(code, runtime.OpCodeMax)
+func (c *Compiler) emitJump(code runtime.OpCode, line runtime.Line) int {
+	c.emitArg(code, runtime.OpCodeMax, line)
 	return len(c.function.Chunk.Code) - 1
 }
 
-func (c *Compiler) patchJump(offset int) {
+func (c *Compiler) patchJump(offset int, line runtime.Line) {
 	jump := len(c.function.Chunk.Code) - 1 - offset
-	c.function.Chunk.Code[offset] = c.opcodeInt(jump)
+	c.function.Chunk.Code[offset] = c.opcodeInt(jump, line)
 }
 
-func (c *Compiler) end() *runtime.Function {
-	c.emit(runtime.OpReturn)
+func (c *Compiler) end(line runtime.Line) *runtime.Function {
+	c.emit(runtime.OpReturn, line)
 	result := c.function
 	c.function = &runtime.Function{Name: c.function.Name}
 	c.locals = nil
 	return result
 }
 
-func (c *Compiler) opcodeInt(n int) runtime.OpCode {
+func (c *Compiler) opcodeInt(n int, line runtime.Line) runtime.OpCode {
 	if n < runtime.OpCodeMin || runtime.OpCodeMax < n {
-		panic(c.errorf("program too large: constant index, local index or a jump offset %d is out of bounds", n))
+		panic(c.errorf(line, "program too large: constant index, local index or a jump offset %d is out of bounds", n))
 	}
 
 	return runtime.OpCode(n)
@@ -134,13 +130,13 @@ func (c *Compiler) resolveUpvalue(name runtime.Atom) (int, bool) {
 // extract1 requires expr to be a pair (val1 . Nil).
 func (c *Compiler) extract1(expr runtime.Value, name string) runtime.Value {
 	if !expr.IsPair() {
-		panic(c.errorf("%s expects 1 argument, got 0", name))
+		panic(c.errorf(expr.Line, "%s expects 1 argument, got 0", name))
 	}
 	pair1 := expr.AsPair()
 	val1 := pair1.Car
 
 	if !pair1.Cdr.IsNil() {
-		panic(c.errorf("%s expects 1 argument, got more", name))
+		panic(c.errorf(pair1.Cdr.Line, "%s expects 1 argument, got more", name))
 	}
 
 	return val1
@@ -149,19 +145,19 @@ func (c *Compiler) extract1(expr runtime.Value, name string) runtime.Value {
 // extract2 requires expr to be a pair (val1 . (val2 . Nil)).
 func (c *Compiler) extract2(expr runtime.Value, name string) (runtime.Value, runtime.Value) {
 	if !expr.IsPair() {
-		panic(c.errorf("%s expects 2 arguments, got 0", name))
+		panic(c.errorf(expr.Line, "%s expects 2 arguments, got 0", name))
 	}
 	pair1 := expr.AsPair()
 	val1 := pair1.Car
 
 	if !pair1.Cdr.IsPair() {
-		panic(c.errorf("%s expects 2 arguments, got 1", name))
+		panic(c.errorf(pair1.Cdr.Line, "%s expects 2 arguments, got 1", name))
 	}
 	pair2 := pair1.Cdr.AsPair()
 	val2 := pair2.Car
 
 	if !pair2.Cdr.IsNil() {
-		panic(c.errorf("%s expects 2 arguments, got more", name))
+		panic(c.errorf(pair2.Cdr.Line, "%s expects 2 arguments, got more", name))
 	}
 
 	return val1, val2
@@ -170,25 +166,25 @@ func (c *Compiler) extract2(expr runtime.Value, name string) (runtime.Value, run
 // extract3 requires expr to be a pair (val1 . (val2 . (val3 . Nil))).
 func (c *Compiler) extract3(expr runtime.Value, name string) (runtime.Value, runtime.Value, runtime.Value) {
 	if !expr.IsPair() {
-		panic(c.errorf("%s expects 3 arguments, got 0", name))
+		panic(c.errorf(expr.Line, "%s expects 3 arguments, got 0", name))
 	}
 	pair1 := expr.AsPair()
 	val1 := pair1.Car
 
 	if !pair1.Cdr.IsPair() {
-		panic(c.errorf("%s expects 3 arguments, got 1", name))
+		panic(c.errorf(pair1.Cdr.Line, "%s expects 3 arguments, got 1", name))
 	}
 	pair2 := pair1.Cdr.AsPair()
 	val2 := pair2.Car
 
 	if !pair2.Cdr.IsPair() {
-		panic(c.errorf("%s expects 3 arguments, got 2", name))
+		panic(c.errorf(pair2.Cdr.Line, "%s expects 3 arguments, got 2", name))
 	}
 	pair3 := pair2.Cdr.AsPair()
 	val3 := pair3.Car
 
 	if !pair3.Cdr.IsNil() {
-		panic(c.errorf("%s expects 3 arguments, got more", name))
+		panic(c.errorf(pair3.Cdr.Line, "%s expects 3 arguments, got more", name))
 	}
 
 	return val1, val2, val3
@@ -202,7 +198,7 @@ func (c *Compiler) Compile(expr runtime.Value) (prog *runtime.Program, err error
 	}()
 
 	c.compileExpr(expr, runtime.EmptyAtom, false)
-	function := c.end()
+	function := c.end(expr.Line)
 	return &runtime.Program{Function: function}, err
 }
 
@@ -212,7 +208,7 @@ func (c *Compiler) Compile(expr runtime.Value) (prog *runtime.Program, err error
 func (c *Compiler) compileExpr(expr runtime.Value, nameHint runtime.Atom, tailPosition bool) {
 	switch {
 	case expr.IsNil():
-		c.emit(runtime.OpNil)
+		c.emit(runtime.OpNil, expr.Line)
 	case expr.IsAtom():
 		atom := expr.AsAtom()
 
@@ -229,14 +225,14 @@ func (c *Compiler) compileExpr(expr runtime.Value, nameHint runtime.Atom, tailPo
 			op = runtime.OpGetGlobal
 		}
 
-		c.emitArg(op, idx)
+		c.emitArg(op, idx, expr.Line)
 	case expr.IsNumber():
 		idx := c.addConstant(expr)
-		c.emitArg(runtime.OpConstant, idx)
+		c.emitArg(runtime.OpConstant, idx, expr.Line)
 	case expr.IsPair():
 		c.compilePair(expr.AsPair(), nameHint, tailPosition)
 	default:
-		panic(c.errorf("unexpected expression: %v", expr))
+		panic(c.errorf(expr.Line, "unexpected expression: %v", expr))
 	}
 }
 
@@ -244,64 +240,73 @@ func (c *Compiler) compileExpr(expr runtime.Value, nameHint runtime.Atom, tailPo
 //
 // "(" expr expr ")".
 func (c *Compiler) compilePair(pair *runtime.Pair, nameHint runtime.Atom, tailPosition bool) {
-	switch pair.Car {
-	case runtime.MakeAtom("quote"):
-		c.compileQuote(pair.Cdr)
-	case runtime.MakeAtom("define"):
-		c.compileDefine(pair.Cdr)
-	case runtime.MakeAtom("lambda"):
-		c.compileLambda(pair.Cdr, nameHint)
-	case runtime.MakeAtom("macro"):
-		c.compileMacro(pair.Cdr, nameHint)
-	case runtime.MakeAtom("if"):
-		c.compileIf(pair.Cdr, tailPosition)
-	case runtime.MakeAtom("cond"):
-		c.compileCond(pair.Cdr, tailPosition)
-	case runtime.MakeAtom("and"):
-		c.compileAnd(pair.Cdr, tailPosition)
-	case runtime.MakeAtom("or"):
-		c.compileOr(pair.Cdr, tailPosition)
-	case runtime.MakeAtom("set!"):
-		c.compileSet(pair.Cdr)
-	case runtime.MakeAtom("begin"):
-		c.compileBegin(pair.Cdr, tailPosition)
-	case runtime.MakeAtom("apply"):
-		c.compileApply(pair.Cdr, tailPosition)
+	// Known form or macro.
+	if pair.Car.IsAtom() && c.compileForm(pair.Car.AsAtom(), pair.Cdr, nameHint, tailPosition) {
+		return
+	}
+
+	// Function call.
+	c.compileExpr(pair.Car, runtime.EmptyAtom, false) // Callee
+	args := pair.Cdr
+	argCount := 0
+
+	for !args.IsNil() {
+		if !args.IsPair() {
+			panic(c.errorf(args.Line, "function call expects a proper list"))
+		}
+		arg := args.AsPair()
+
+		c.compileExpr(arg.Car, runtime.EmptyAtom, false) // Argument
+		args = arg.Cdr
+		argCount++
+	}
+
+	if tailPosition {
+		c.emitArg(runtime.OpTailCall, argCount, pair.Car.Line)
+	} else {
+		c.emitArg(runtime.OpCall, argCount, pair.Car.Line)
+	}
+}
+
+func (c *Compiler) compileForm(name runtime.Atom, args runtime.Value, nameHint runtime.Atom, tailPosition bool) bool {
+	switch name {
+	case runtime.NewAtom("quote"):
+		c.compileQuote(args)
+	case runtime.NewAtom("define"):
+		c.compileDefine(args)
+	case runtime.NewAtom("lambda"):
+		c.compileLambda(args, nameHint)
+	case runtime.NewAtom("macro"):
+		c.compileMacro(args, nameHint)
+	case runtime.NewAtom("if"):
+		c.compileIf(args, tailPosition)
+	case runtime.NewAtom("cond"):
+		c.compileCond(args, tailPosition)
+	case runtime.NewAtom("and"):
+		c.compileAnd(args, tailPosition)
+	case runtime.NewAtom("or"):
+		c.compileOr(args, tailPosition)
+	case runtime.NewAtom("set!"):
+		c.compileSet(args)
+	case runtime.NewAtom("begin"):
+		c.compileBegin(args, tailPosition)
+	case runtime.NewAtom("apply"):
+		c.compileApply(args, tailPosition)
 	default:
 		// Macro expansion.
-		if pair.Car.IsAtom() {
-			if m, ok := c.macros.GetMacro(pair.Car.AsAtom()); ok {
-				expanded, err := c.macros.ExpandMacro(m, pair.Cdr)
-				if err != nil {
-					panic(c.errorf("%s", err.Error()))
-				}
-				c.compileExpr(expanded, nameHint, tailPosition)
-				return
-			}
+		m, ok := c.macros.GetMacro(name)
+		if !ok {
+			return false
 		}
 
-		// Function call.
-		c.compileExpr(pair.Car, runtime.EmptyAtom, false) // Callee
-		args := pair.Cdr
-		argCount := 0
-
-		for !args.IsNil() {
-			if !args.IsPair() {
-				panic(c.errorf("function call expects a proper list"))
-			}
-			arg := args.AsPair()
-
-			c.compileExpr(arg.Car, runtime.EmptyAtom, false) // Argument
-			args = arg.Cdr
-			argCount++
+		expanded, err := c.macros.ExpandMacro(m, args)
+		if err != nil {
+			panic(c.errorf(args.Line, "%s", err.Error()))
 		}
-
-		if tailPosition {
-			c.emitArg(runtime.OpTailCall, argCount)
-		} else {
-			c.emitArg(runtime.OpCall, argCount)
-		}
+		c.compileExpr(expanded, nameHint, tailPosition)
 	}
+
+	return true
 }
 
 // Quote:
@@ -311,10 +316,10 @@ func (c *Compiler) compileQuote(expr runtime.Value) {
 	quoted := c.extract1(expr, "quote")
 
 	if quoted.IsNil() {
-		c.emit(runtime.OpNil)
+		c.emit(runtime.OpNil, quoted.Line)
 	} else {
 		idx := c.addConstant(quoted)
-		c.emitArg(runtime.OpConstant, idx)
+		c.emitArg(runtime.OpConstant, idx, quoted.Line)
 	}
 }
 
@@ -325,13 +330,13 @@ func (c *Compiler) compileDefine(expr runtime.Value) {
 	name, value := c.extract2(expr, "define")
 
 	if !name.IsAtom() {
-		panic(c.errorf("define expects an atom"))
+		panic(c.errorf(expr.Line, "define expects an atom"))
 	}
 
 	c.compileExpr(value, name.AsAtom(), false)
 	idx := c.addConstant(name)
-	c.emitArg(runtime.OpDefineGlobal, idx)
-	c.emitArg(runtime.OpConstant, idx)
+	c.emitArg(runtime.OpDefineGlobal, idx, expr.Line)
+	c.emitArg(runtime.OpConstant, idx, expr.Line)
 }
 
 // Lambda:
@@ -344,7 +349,7 @@ func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 	for params.IsPair() {
 		param := params.AsPair()
 		if !param.Car.IsAtom() {
-			panic(compiler.errorf("function parameter expects atom"))
+			panic(compiler.errorf(expr.Line, "function parameter expects atom"))
 		}
 		atom := param.Car.AsAtom()
 
@@ -358,13 +363,13 @@ func (c *Compiler) compileLambda(expr runtime.Value, nameHint runtime.Atom) {
 		compiler.addLocal(atom)
 		compiler.function.IsVariadic = true
 	} else if !params.IsNil() {
-		panic(compiler.errorf("function parameter expects atom"))
+		panic(compiler.errorf(expr.Line, "function parameter expects atom"))
 	}
 
 	compiler.compileExpr(body, runtime.EmptyAtom, true)
-	function := compiler.end()
+	function := compiler.end(body.Line)
 	idx := c.addConstant(runtime.MakeFunction(function))
-	c.emitArg(runtime.OpClosure, idx)
+	c.emitArg(runtime.OpClosure, idx, expr.Line)
 }
 
 // Macro:
@@ -377,7 +382,7 @@ func (c *Compiler) compileMacro(expr runtime.Value, nameHint runtime.Atom) {
 	for params.IsPair() {
 		param := params.AsPair()
 		if !param.Car.IsAtom() {
-			panic(c.errorf("macro parameter expects atom"))
+			panic(c.errorf(expr.Line, "macro parameter expects atom"))
 		}
 		atom := param.Car.AsAtom()
 
@@ -389,11 +394,11 @@ func (c *Compiler) compileMacro(expr runtime.Value, nameHint runtime.Atom) {
 		atom := params.AsAtom()
 		macro.RestParam = atom
 	} else if !params.IsNil() {
-		panic(c.errorf("macro parameter expects atom"))
+		panic(c.errorf(expr.Line, "macro parameter expects atom"))
 	}
 
 	c.macros.StoreMacro(nameHint, macro)
-	c.emit(runtime.OpNil)
+	c.emit(runtime.OpNil, expr.Line)
 }
 
 // If:
@@ -403,16 +408,16 @@ func (c *Compiler) compileIf(expr runtime.Value, tailPosition bool) {
 	condition, thenBranch, elseBranch := c.extract3(expr, "if")
 
 	c.compileExpr(condition, runtime.EmptyAtom, false)
-	thenJump := c.emitJump(runtime.OpJumpIfFalse)
-	c.emit(runtime.OpPop)
+	thenJump := c.emitJump(runtime.OpJumpIfFalse, condition.Line)
+	c.emit(runtime.OpPop, condition.Line)
 
 	c.compileExpr(thenBranch, runtime.EmptyAtom, tailPosition)
-	elseJump := c.emitJump(runtime.OpJump)
-	c.patchJump(thenJump)
-	c.emit(runtime.OpPop)
+	elseJump := c.emitJump(runtime.OpJump, expr.Line)
+	c.patchJump(thenJump, thenBranch.Line)
+	c.emit(runtime.OpPop, thenBranch.Line)
 
 	c.compileExpr(elseBranch, runtime.EmptyAtom, tailPosition)
-	c.patchJump(elseJump)
+	c.patchJump(elseJump, elseBranch.Line)
 }
 
 // Cond:
@@ -424,27 +429,27 @@ func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 
 	for !curr.IsNil() {
 		if !curr.IsPair() {
-			panic(c.errorf("cond expect a list of clauses"))
+			panic(c.errorf(expr.Line, "cond expect a list of clauses"))
 		}
 		clause := curr.AsPair()
 		condition, value := c.extract2(clause.Car, "cond clause")
 
 		c.compileExpr(condition, runtime.EmptyAtom, false)
-		nextJump := c.emitJump(runtime.OpJumpIfFalse)
-		c.emit(runtime.OpPop)
+		nextJump := c.emitJump(runtime.OpJumpIfFalse, condition.Line)
+		c.emit(runtime.OpPop, condition.Line)
 
 		c.compileExpr(value, runtime.EmptyAtom, tailPosition)
-		endJump := c.emitJump(runtime.OpJump)
+		endJump := c.emitJump(runtime.OpJump, value.Line)
 		endJumps = append(endJumps, endJump)
-		c.patchJump(nextJump)
-		c.emit(runtime.OpPop)
+		c.patchJump(nextJump, value.Line)
+		c.emit(runtime.OpPop, value.Line)
 
 		curr = clause.Cdr
 	}
 
-	c.emit(runtime.OpNil)
+	c.emit(runtime.OpNil, expr.Line)
 	for _, jump := range endJumps {
-		c.patchJump(jump)
+		c.patchJump(jump, expr.Line)
 	}
 }
 
@@ -454,31 +459,31 @@ func (c *Compiler) compileCond(expr runtime.Value, tailPosition bool) {
 func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 	if expr.IsNil() {
 		idx := c.addConstant(runtime.True)
-		c.emitArg(runtime.OpConstant, idx)
+		c.emitArg(runtime.OpConstant, idx, expr.Line)
 		return
 	}
 
 	if !expr.IsPair() {
-		panic(c.errorf("and expects arguments"))
+		panic(c.errorf(expr.Line, "and expects arguments"))
 	}
 	args := expr.AsPair()
 	var endJumps []int
 
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, runtime.EmptyAtom, false)
-		endJump := c.emitJump(runtime.OpJumpIfFalse)
+		endJump := c.emitJump(runtime.OpJumpIfFalse, args.Car.Line)
 		endJumps = append(endJumps, endJump)
-		c.emit(runtime.OpPop)
+		c.emit(runtime.OpPop, args.Car.Line)
 
 		if !args.Cdr.IsPair() {
-			panic(c.errorf("and expects arguments"))
+			panic(c.errorf(expr.Line, "and expects arguments"))
 		}
 		args = args.Cdr.AsPair()
 	}
 
 	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
 	for _, jump := range endJumps {
-		c.patchJump(jump)
+		c.patchJump(jump, expr.Line)
 	}
 }
 
@@ -487,31 +492,31 @@ func (c *Compiler) compileAnd(expr runtime.Value, tailPosition bool) {
 // "(" "or" expr* ")".
 func (c *Compiler) compileOr(expr runtime.Value, tailPosition bool) {
 	if expr.IsNil() {
-		c.emit(runtime.OpNil)
+		c.emit(runtime.OpNil, expr.Line)
 		return
 	}
 
 	if !expr.IsPair() {
-		panic(c.errorf("or expects arguments"))
+		panic(c.errorf(expr.Line, "or expects arguments"))
 	}
 	args := expr.AsPair()
 	var endJumps []int
 
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, runtime.EmptyAtom, false)
-		endJump := c.emitJump(runtime.OpJumpIfTrue)
+		endJump := c.emitJump(runtime.OpJumpIfTrue, args.Car.Line)
 		endJumps = append(endJumps, endJump)
-		c.emit(runtime.OpPop)
+		c.emit(runtime.OpPop, args.Car.Line)
 
 		if !args.Cdr.IsPair() {
-			panic(c.errorf("or expects arguments"))
+			panic(c.errorf(expr.Line, "or expects arguments"))
 		}
 		args = args.Cdr.AsPair()
 	}
 
 	c.compileExpr(args.Car, runtime.EmptyAtom, tailPosition)
 	for _, jump := range endJumps {
-		c.patchJump(jump)
+		c.patchJump(jump, expr.Line)
 	}
 }
 
@@ -522,7 +527,7 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 	dest, value := c.extract2(expr, "set!")
 
 	if !dest.IsAtom() {
-		panic(c.errorf("set! expects an atom"))
+		panic(c.errorf(expr.Line, "set! expects an atom"))
 	}
 	name := dest.AsAtom()
 
@@ -540,7 +545,7 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 	}
 
 	c.compileExpr(value, runtime.EmptyAtom, false)
-	c.emitArg(op, idx)
+	c.emitArg(op, idx, value.Line)
 }
 
 // Begin:
@@ -548,16 +553,16 @@ func (c *Compiler) compileSet(expr runtime.Value) {
 // "(" "begin" expr+ ")".
 func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 	if !expr.IsPair() {
-		panic(c.errorf("begin expects arguments"))
+		panic(c.errorf(expr.Line, "begin expects arguments"))
 	}
 	args := expr.AsPair()
 
 	for !args.Cdr.IsNil() {
 		c.compileExpr(args.Car, runtime.EmptyAtom, false)
-		c.emit(runtime.OpPop)
+		c.emit(runtime.OpPop, args.Car.Line)
 
 		if !args.Cdr.IsPair() {
-			panic(c.errorf("begin expects arguments"))
+			panic(c.errorf(expr.Line, "begin expects arguments"))
 		}
 		args = args.Cdr.AsPair()
 	}
@@ -570,7 +575,7 @@ func (c *Compiler) compileBegin(expr runtime.Value, tailPosition bool) {
 // "(" "apply" expr expr* pair ")".
 func (c *Compiler) compileApply(expr runtime.Value, tailPosition bool) {
 	if !expr.IsPair() {
-		panic(c.errorf("apply expects arguments"))
+		panic(c.errorf(expr.Line, "apply expects arguments"))
 	}
 	pair := expr.AsPair()
 
@@ -580,7 +585,7 @@ func (c *Compiler) compileApply(expr runtime.Value, tailPosition bool) {
 
 	for !args.IsNil() {
 		if !args.IsPair() {
-			panic(c.errorf("apply expects a proper list"))
+			panic(c.errorf(expr.Line, "apply expects a proper list"))
 		}
 		arg := args.AsPair()
 
@@ -590,12 +595,12 @@ func (c *Compiler) compileApply(expr runtime.Value, tailPosition bool) {
 	}
 
 	if argCount == 0 {
-		panic(c.errorf("apply expects at least 2 arguments"))
+		panic(c.errorf(expr.Line, "apply expects at least 2 arguments"))
 	}
 
 	if tailPosition {
-		c.emitArg(runtime.OpTailApply, argCount)
+		c.emitArg(runtime.OpTailApply, argCount, expr.Line)
 	} else {
-		c.emitArg(runtime.OpApply, argCount)
+		c.emitArg(runtime.OpApply, argCount, expr.Line)
 	}
 }

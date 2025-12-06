@@ -5,10 +5,10 @@ import "math"
 type Chunk struct {
 	Code      []OpCode
 	Constants []Value
-	Lines     []int
+	Lines     []Line
 }
 
-func (c *Chunk) Write(code OpCode, line int) {
+func (c *Chunk) Write(code OpCode, line Line) {
 	c.Code = append(c.Code, code)
 	c.Lines = append(c.Lines, line)
 }

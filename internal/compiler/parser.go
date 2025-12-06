@@ -30,6 +30,30 @@ func NewParser(name, source string) *Parser {
 	return p
 }
 
+func (p *Parser) makeNil() runtime.Value {
+	val := runtime.MakeNil()
+	val.Line = runtime.Line(p.previous.Line)
+	return val
+}
+
+func (p *Parser) makeNumber(n float64) runtime.Value {
+	val := runtime.MakeNumber(n)
+	val.Line = runtime.Line(p.previous.Line)
+	return val
+}
+
+func (p *Parser) makeAtom(s string) runtime.Value {
+	val := runtime.MakeAtom(s)
+	val.Line = runtime.Line(p.previous.Line)
+	return val
+}
+
+func (p *Parser) makePair(pair *runtime.Pair) runtime.Value {
+	val := runtime.MakePair(pair)
+	val.Line = runtime.Line(p.previous.Line)
+	return val
+}
+
 func (p *Parser) AtEOF() bool {
 	return p.match(tokenizer.TokenEOF)
 }
@@ -44,26 +68,25 @@ func (p *Parser) Expression() (result runtime.Value, err error) {
 	return p.expression(), nil
 }
 
-// TODO: We need to inject line number information to each runtime.Value.
 func (p *Parser) expression() runtime.Value {
 	switch {
 	case p.match(tokenizer.TokenAtom):
-		return runtime.MakeAtom(p.previous.Val)
+		return p.makeAtom(p.previous.Val)
 	case p.match(tokenizer.TokenNumber):
 		n := p.parseNumber()
-		return runtime.MakeNumber(n)
+		return p.makeNumber(n)
 	case p.match(tokenizer.TokenQuote):
 		quoted := p.expression()
-		return runtime.Cons(runtime.MakeAtom("quote"), runtime.Cons(quoted, runtime.MakeNil()))
+		return runtime.Cons(p.makeAtom("quote"), runtime.Cons(quoted, p.makeNil()))
 	case p.match(tokenizer.TokenBackquote):
 		return p.backquote()
 	case p.match(tokenizer.TokenLeftParen):
 		if p.match(tokenizer.TokenRightParen) {
-			return runtime.MakeNil()
+			return p.makeNil()
 		}
 
 		head := &runtime.Pair{Car: p.expression(), Cdr: runtime.Nil}
-		list := runtime.MakePair(head)
+		list := p.makePair(head)
 		curr := &head.Cdr
 
 		for !p.match(tokenizer.TokenRightParen) {
@@ -76,7 +99,7 @@ func (p *Parser) expression() runtime.Value {
 
 			elem := p.expression()
 			next := &runtime.Pair{Car: elem, Cdr: runtime.Nil}
-			*curr = runtime.MakePair(next)
+			*curr = p.makePair(next)
 			curr = &next.Cdr
 		}
 		return list
@@ -132,28 +155,28 @@ func (p *Parser) backquote() runtime.Value {
 		return p.expression()
 	default:
 		quoted := p.expression()
-		return runtime.Cons(runtime.MakeAtom("quote"), runtime.Cons(quoted, runtime.MakeNil()))
+		return runtime.Cons(p.makeAtom("quote"), runtime.Cons(quoted, p.makeNil()))
 	}
 }
 
 func (p *Parser) quotedList() runtime.Value {
 	switch {
 	case p.match(tokenizer.TokenRightParen):
-		return runtime.MakeNil()
+		return p.makeNil()
 	default:
-		return runtime.Cons(runtime.MakeAtom("append"), p.quotedListElements())
+		return runtime.Cons(p.makeAtom("append"), p.quotedListElements())
 	}
 }
 
 func (p *Parser) quotedListElements() runtime.Value {
 	switch {
 	case p.match(tokenizer.TokenRightParen):
-		return runtime.MakeNil()
+		return p.makeNil()
 	case p.match(tokenizer.TokenCommaAt):
 		return runtime.Cons(p.expression(), p.quotedListElements())
 	default:
 		elem := p.backquote()
-		list := runtime.Cons(runtime.MakeAtom("list"), runtime.Cons(elem, runtime.MakeNil()))
+		list := runtime.Cons(p.makeAtom("list"), runtime.Cons(elem, p.makeNil()))
 		return runtime.Cons(list, p.quotedListElements())
 	}
 }
