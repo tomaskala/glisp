@@ -9,7 +9,7 @@ stack-based virtual machine.
 - Short-circuiting `if` and `cond` conditionals as well as `and` and `or` forms
 - Macros (have to be defined and bound to a name before expansion, because we 
   are using a single-pass compiler)
-- Quoting (`'`, `\``, `,`, `,@`)
+- Quoting (`'`, `` ` ``, `,`, `,@`)
 - Proper tail-call optimization
 - [Standard library](internal/runtime/stdlib.ss) embedded into the executable
 - Line number tracking for errors
