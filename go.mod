@@ -1,6 +1,6 @@
 module tomaskala.com/glisp
 
-go 1.24.4
+go 1.27.0
 
 require (
 	github.com/chzyer/readline v1.5.1
